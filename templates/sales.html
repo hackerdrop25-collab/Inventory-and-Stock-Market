@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Sales{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">Sales & Billing</h1>
+
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
+    <!-- New Sale Form -->
+    <div class="glass-panel" style="padding: 20px; height: fit-content;">
+        <h2 style="margin-bottom: 20px;">New Transaction</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label class="form-label">Select Product</label>
+                <select name="product_id" id="productSelect" class="form-control" required onchange="updatePrice()">
+                    <option value="" disabled selected>Choose a product...</option>
+                    {% for product in products %}
+                    <option value="{{ product._id }}" data-price="{{ product.price }}"
+                        data-stock="{{ product.quantity }}">
+                        {{ product.name }} (Stock: {{ product.quantity }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Quantity</label>
+                <input type="number" name="quantity" id="quantityInput" class="form-control" min="1" required
+                    oninput="calculateTotal()">
+            </div>
+
+            <div class="glass-panel"
+                style="background: rgba(0,0,0,0.2); padding: 15px; margin-bottom: 20px; text-align: center;">
+                <div style="color: var(--text-secondary); font-size: 0.9rem;">Estimated Total</div>
+                <div id="totalDisplay" style="font-size: 1.5rem; font-weight: 700; color: var(--success-color);">$0.00
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Confirm
+                Sale</button>
+        </form>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="glass-panel" style="padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Recent Transactions</h2>
+            <div class="glass-panel"
+                style="padding: 5px 12px; display: flex; align-items: center; gap: 8px; max-width: 200px;">
+                <i class="fas fa-search" style="color: var(--text-secondary); font-size: 0.8rem;"></i>
+                <input type="text" class="table-search" data-table="salesTable" placeholder="Search..."
+                    style="background: transparent; border: none; color: white; outline: none; padding: 2px; width: 100%; font-size: 0.9rem;">
+            </div>
+        </div>
+        <div class="table-container">
+            <table id="salesTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Total</th>
+                        <th>Sold By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for txn in transactions %}
+                    <tr>
+                        <td>{{ txn.date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ txn.product_name }}</td>
+                        <td>{{ txn.quantity }}</td>
+                        <td>${{ "%.2f"|format(txn.total_price) }}</td>
+                        <td>{{ txn.sold_by }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center;">No transactions found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    function updatePrice() {
+        calculateTotal();
+    }
+
+    function calculateTotal() {
+        const select = document.getElementById('productSelect');
+        const quantity = document.getElementById('quantityInput').value;
+        const totalDisplay = document.getElementById('totalDisplay');
+
+        if (select.selectedIndex > 0 && quantity) {
+            const price = parseFloat(select.options[select.selectedIndex].dataset.price);
+            const total = price * quantity;
+            totalDisplay.textContent = '$' + total.toFixed(2);
+        } else {
+            totalDisplay.textContent = '$0.00';
+        }
+    }
+</script>
+{% endblock %}

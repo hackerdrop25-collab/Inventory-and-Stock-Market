@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Manager | {% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+
+    <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    {% if current_user %}
+    <nav class="navbar glass-panel container">
+        <a href="{{ url_for('dashboard') }}" class="brand">
+            <i class="fas fa-boxes"></i> IMS
+        </a>
+        <div class="nav-links">
+            <a href="{{ url_for('dashboard') }}" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+            <a href="{{ url_for('products') }}" class="nav-link"><i class="fas fa-box-open"></i> Products</a>
+            <a href="{{ url_for('sales') }}" class="nav-link"><i class="fas fa-shopping-cart"></i> Sales</a>
+            <a href="{{ url_for('suppliers') }}" class="nav-link"><i class="fas fa-truck"></i> Suppliers</a>
+            <a href="{{ url_for('reports') }}" class="nav-link"><i class="fas fa-file-alt"></i> Reports</a>
+            <button id="theme-toggle" class="btn"
+                style="padding: 5px 12px; background: rgba(255,255,255,0.05); color: var(--text-primary);">
+                <i class="fas fa-moon"></i>
+            </button>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger" style="padding: 5px 15px;"><i
+                    class="fas fa-sign-out-alt"></i> Logout</a>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // Auto dismiss flash messages
+        setTimeout(() => {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 300);
+            });
+        }, 3000);
+    </script>
+    <script src="{{ url_for('static', filename='js/platform.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/animation.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

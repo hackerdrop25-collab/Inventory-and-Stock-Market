@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Products{% endblock %}
+
+{% block content %}
+<div
+    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 20px; flex-wrap: wrap;">
+    <h1>Product Inventory</h1>
+    <div style="display: flex; gap: 15px; flex-grow: 1; justify-content: flex-end; align-items: center;">
+        <div class="glass-panel"
+            style="padding: 5px 15px; display: flex; align-items: center; gap: 10px; flex-grow: 0; max-width: 300px;">
+            <i class="fas fa-search" style="color: var(--text-secondary);"></i>
+            <input type="text" class="table-search" data-table="productTable" placeholder="Search products..."
+                style="background: transparent; border: none; color: white; outline: none; padding: 5px; width: 100%;">
+        </div>
+        <button onclick="openModal('addModal')" class="btn btn-primary"><i class="fas fa-plus"></i> Add Product</button>
+    </div>
+</div>
+
+<div class="glass-panel" style="padding: 20px;">
+    <div class="table-container">
+        <table id="productTable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                    <th>Supplier</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    <td>{{ product.name }}</td>
+                    <td>{{ product.category }}</td>
+                    <td>${{ "%.2f"|format(product.price) }}</td>
+                    <td>
+                        <span class="{{ 'text-danger' if product.quantity <= 5 else 'text-success' }}">
+                            {{ product.quantity }}
+                        </span>
+                    </td>
+                    <td>{{ product.supplier }}</td>
+                    <td>
+                        <button class="btn edit-btn" style="padding: 5px 10px; background: rgba(255,255,255,0.1);"
+                            data-id="{{ product._id }}" data-name="{{ product.name }}"
+                            data-category="{{ product.category }}" data-price="{{ product.price }}"
+                            data-quantity="{{ product.quantity }}" data-supplier="{{ product.supplier }}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <a href="{{ url_for('delete_product', id=product._id) }}" class="btn btn-danger"
+                            style="padding: 5px 10px;" onclick="return confirm('Are you sure?')"><i
+                                class="fas fa-trash"></i></a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center;">No products found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Modal -->
+<div id="addModal" class="modal">
+    <div class="glass-panel modal-content" style="padding: 30px;">
+        <h2 style="margin-bottom: 20px;">Add New Product</h2>
+        <form action="{{ url_for('products') }}" method="POST">
+            <div class="form-group">
+                <label class="form-label">Product Name</label>
+                <input type="text" name="name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <input type="text" name="category" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Price</label>
+                <input type="number" step="0.01" name="price" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Quantity</label>
+                <input type="number" name="quantity" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Supplier</label>
+                <select name="supplier" class="form-control">
+                    {% for supplier in suppliers %}
+                    <option value="{{ supplier.name }}">{{ supplier.name }}</option>
+                    {% else %}
+                    <option value="General">General</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" onclick="closeModal('addModal')" class="btn"
+                    style="background: rgba(255,255,255,0.1);">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Product</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editModal" class="modal">
+    <div class="glass-panel modal-content" style="padding: 30px;">
+        <h2 style="margin-bottom: 20px;">Edit Product</h2>
+        <form id="editForm" method="POST">
+            <div class="form-group">
+                <label class="form-label">Product Name</label>
+                <input type="text" id="editName" name="name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <input type="text" id="editCategory" name="category" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Price</label>
+                <input type="number" step="0.01" id="editPrice" name="price" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Quantity</label>
+                <input type="number" id="editQuantity" name="quantity" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Supplier</label>
+                <input type="text" id="editSupplier" name="supplier" class="form-control" required>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" onclick="closeModal('editModal')" class="btn"
+                    style="background: rgba(255,255,255,0.1);">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Product</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function openModal(id) {
+        document.getElementById(id).classList.add('active');
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+
+    document.querySelectorAll('.edit-btn').forEach(button => {
+        button.addEventListener('click', function () {
+            const id = this.dataset.id;
+            const name = this.dataset.name;
+            const category = this.dataset.category;
+            const price = this.dataset.price;
+            const quantity = this.dataset.quantity;
+            const supplier = this.dataset.supplier;
+
+            document.getElementById('editName').value = name;
+            document.getElementById('editCategory').value = category;
+            document.getElementById('editPrice').value = price;
+            document.getElementById('editQuantity').value = quantity;
+            document.getElementById('editSupplier').value = supplier;
+
+            document.getElementById('editForm').action = "/products/update/" + id;
+
+            openModal('editModal');
+        });
+    });
+</script>
+{% endblock %}
