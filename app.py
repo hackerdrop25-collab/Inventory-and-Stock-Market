@@ -32,6 +32,9 @@ users_collection = db['users']
 products_collection = db['products']
 sales_collection = db['sales']
 suppliers_collection = db['suppliers']
+returns_collection = db['returns']
+firewall_logs = db['firewall_logs']
+
 
 # Context Processor for User Info
 @app.context_processor
@@ -43,6 +46,16 @@ def login_required(f):
     def wrap(*args, **kwargs):
         if 'user' not in session:
             return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    wrap.__name__ = f.__name__
+    return wrap
+
+# Admin Required Decorator
+def admin_required(f):
+    def wrap(*args, **kwargs):
+        if session.get('role') != 'Admin':
+            flash('Access Denied: Admin privileges required.', 'error')
+            return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     wrap.__name__ = f.__name__
     return wrap
@@ -63,14 +76,44 @@ def login():
         
         user = users_collection.find_one({'username': username})
         
+        # Log entry
+        log_entry = {
+            'username': username,
+            'ip_address': request.remote_addr,
+            'timestamp': datetime.now(),
+            'event_type': 'Login Attempt'
+        }
+        
         if user and check_password_hash(user['password'], password):
             session['user'] = username
-            session['role'] = user.get('role', 'Student')
+            
+            # Auto-upgrade personal ID to Admin for security
+            if username == 'hackerdrop25@gmail.com':
+                role = 'Admin'
+                if user.get('role') != 'Admin':
+                    users_collection.update_one({'username': username}, {'$set': {'role': 'Admin'}})
+            else:
+                role = user.get('role', 'Student')
+                
+            session['role'] = role
+            
+            log_entry['status'] = 'Success'
+            firewall_logs.insert_one(log_entry)
+            
             return redirect(url_for('dashboard'))
         else:
-            flash('Invalid username or password', 'error')
+            log_entry['status'] = 'Failed'
+            firewall_logs.insert_one(log_entry)
+            flash('Incorrect Email Id or Password', 'error')
             
     return render_template('login.html')
+
+@app.route('/security-logs')
+@login_required
+@admin_required
+def security_logs():
+    logs = list(firewall_logs.find().sort('timestamp', -1).limit(100))
+    return render_template('security_logs.html', logs=logs)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -79,8 +122,13 @@ def register():
         password = request.form['password']
         role = request.form.get('role', 'Student') # Default to Student if not specified
         
+        # Security: Only personal ID can register as Admin
+        if role == 'Admin' and username != 'hackerdrop25@gmail.com':
+            role = 'Student'
+            flash('Security Restriction: Only personal ID can be Admin. Role set to Student.', 'warning')
+        
         if users_collection.find_one({'username': username}):
-            flash('Username already exists', 'error')
+            flash('Incorrect Email Id or Password', 'error')
         else:
             hashed_password = generate_password_hash(password)
             users_collection.insert_one({
@@ -104,15 +152,15 @@ def logout():
 def dashboard():
     # Filter based on role
     query_filter = {}
-    if session.get('role') != 'Admin':
-        query_filter['added_by'] = session['user']
+    # Statistics are global for now, or you can keep filters if you want personal stats.
+    # Let's show global stats for Admin, and maybe global for Student too since they process everything.
+    query_filter = {}
 
     # Gather Statistics
     total_products = products_collection.count_documents(query_filter)
     
     # Low Stock (combine filter with low stock condition)
     low_stock_filter = {'quantity': {'$lte': 5}}
-    low_stock_filter.update(query_filter)
     low_stock_products = products_collection.count_documents(low_stock_filter)
     
     # Calculate Total Sales (Today)
@@ -120,8 +168,7 @@ def dashboard():
     
     # Sales Aggregation match stage
     match_stage = {'date': {'$gte': today_start}}
-    if session.get('role') != 'Admin':
-        match_stage['sold_by'] = session['user']
+    match_stage = {'date': {'$gte': today_start}}
         
     today_sales = sales_collection.aggregate([
         {'$match': match_stage},
@@ -135,8 +182,7 @@ def dashboard():
         
     # Recent Sales
     sales_filter = {}
-    if session.get('role') != 'Admin':
-        sales_filter['sold_by'] = session['user']
+    sales_filter = {}
         
     recent_sales = sales_collection.find(sales_filter).sort('date', -1).limit(5)
     
@@ -169,10 +215,8 @@ def products():
         flash('Product added successfully', 'success')
         return redirect(url_for('products'))
         
-    # Filter products based on role
+    # Show all products for both Admin and Student
     filter_query = {}
-    if session.get('role') != 'Admin':
-        filter_query['added_by'] = session['user']
         
     products_list = products_collection.find(filter_query)
     suppliers_list = suppliers_collection.find()
@@ -180,11 +224,10 @@ def products():
 
 @app.route('/products/delete/<id>')
 @login_required
+@admin_required
 def delete_product(id):
-    # Ensure user owns the product or is admin
+    # Admin required decorator handles permission
     filter_query = {'_id': ObjectId(id)}
-    if session.get('role') != 'Admin':
-        filter_query['added_by'] = session['user']
 
     result = products_collection.delete_one(filter_query)
     if result.deleted_count > 0:
@@ -195,6 +238,7 @@ def delete_product(id):
 
 @app.route('/products/update/<id>', methods=['POST'])
 @login_required
+@admin_required
 def update_product(id):
     name = request.form['name']
     category = request.form['category']
@@ -202,10 +246,8 @@ def update_product(id):
     quantity = int(request.form['quantity'])
     supplier = request.form['supplier']
     
-    # Ensure user owns the product or is admin
+    # Admin required decorator handles permission
     filter_query = {'_id': ObjectId(id)}
-    if session.get('role') != 'Admin':
-        filter_query['added_by'] = session['user']
         
     result = products_collection.update_one(filter_query, {'$set': {
         'name': name,
@@ -228,13 +270,9 @@ def sales():
     if request.method == 'POST':
         product_id = request.form['product_id']
         quantity = int(request.form['quantity'])
+        customer_name = request.form.get('customer_name', 'Walk-in Customer')
         
-        # Determine product filter (checking ownership/admin implicit in logic?)
-        # Strict check: Can only sell own products (unless Admin?)
-        # Let's assume you can only sell what you can see.
         prod_filter = {'_id': ObjectId(product_id)}
-        if session.get('role') != 'Admin':
-            prod_filter['added_by'] = session['user']
             
         product = products_collection.find_one(prod_filter)
         
@@ -252,6 +290,8 @@ def sales():
                     'quantity': quantity,
                     'price_per_unit': product['price'],
                     'total_price': total_price,
+                    'customer_name': customer_name,
+                    'supplier_name': product.get('supplier', 'Unknown'),
                     'date': datetime.now(),
                     'sold_by': session['user']
                 })
@@ -262,22 +302,20 @@ def sales():
             flash('Product not found or permission denied!', 'error')
         return redirect(url_for('sales'))
 
-    # Helper filter for retrieving products to populate the dropdown
+    # All users can see complete product list for sales dropdown
     prod_filter = {}
-    if session.get('role') != 'Admin':
-        prod_filter['added_by'] = session['user']
     products_list = products_collection.find(prod_filter)
     
     # Filter transactions based on role
     sale_filter = {}
-    if session.get('role') != 'Admin':
-        sale_filter['sold_by'] = session['user']
+    sale_filter = {}
         
     recent_transactions = sales_collection.find(sale_filter).sort('date', -1).limit(10)
     return render_template('sales.html', products=products_list, transactions=recent_transactions)
 
 @app.route('/suppliers', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def suppliers():
     if request.method == 'POST':
         name = request.form['name']
@@ -297,16 +335,57 @@ def suppliers():
     suppliers_list = suppliers_collection.find()
     return render_template('suppliers.html', suppliers=suppliers_list)
 
+@app.route('/returns', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def returns():
+    if request.method == 'POST':
+        product_id = request.form['product_id']
+        quantity = int(request.form['quantity'])
+        reason = request.form['reason']
+        
+        prod_filter = {'_id': ObjectId(product_id)}
+            
+        product = products_collection.find_one(prod_filter)
+        
+        if product:
+            # Record the return without removing from main stock
+            returns_collection.insert_one({
+                'product_name': product['name'],
+                'product_id': ObjectId(product_id),
+                'supplier_name': product.get('supplier', 'Unknown'),
+                'quantity': quantity,
+                'reason': reason,
+                'date': datetime.now(),
+                'processed_by': session['user']
+            })
+            flash('Return processed successfully', 'success')
+        else:
+            flash('Product not found!', 'error')
+        return redirect(url_for('returns'))
+
+    # Get all products for return selection
+    prod_filter = {}
+    products_list = products_collection.find(prod_filter)
+    
+    # Get returns list
+    return_filter = {}
+    recent_returns = returns_collection.find(return_filter).sort('date', -1)
+    
+    return render_template('returns.html', products=products_list, returns=recent_returns)
+
 @app.route('/reports')
 @login_required
 def reports():
     # Filters based on role
     prod_filter = {'quantity': {'$lte': 5}}
     sale_filter = {}
+    return_filter = {}
     
     if session.get('role') != 'Admin':
         prod_filter['added_by'] = session['user']
         sale_filter['sold_by'] = session['user']
+        return_filter['processed_by'] = session['user']
         
     # Low Stock Report
     low_stock = list(products_collection.find(prod_filter))
@@ -335,9 +414,13 @@ def reports():
     # Recent Sales List
     sales = list(sales_collection.find(sale_filter).sort('date', -1).limit(50))
     
+    # Returns Report
+    returns_list = list(returns_collection.find(return_filter).sort('date', -1))
+    
     return render_template('reports.html', 
                            low_stock=low_stock, 
                            sales=sales,
+                           returns=returns_list,
                            chart_labels=chart_labels,
                            chart_data=chart_data)
 

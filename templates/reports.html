@@ -57,6 +57,7 @@
                     <tr>
                         <th>Date</th>
                         <th>Product</th>
+                        <th>Customer</th>
                         <th>Quantity</th>
                         <th>Total Amount</th>
                         <th>Sold By</th>
@@ -67,6 +68,7 @@
                     <tr>
                         <td>{{ sale.date.strftime('%Y-%m-%d %H:%M') }}</td>
                         <td>{{ sale.product_name }}</td>
+                        <td>{{ sale.customer_name if sale.customer_name else 'N/A' }}</td>
                         <td>{{ sale.quantity }}</td>
                         <td>${{ "%.2f"|format(sale.total_price) }}</td>
                         <td>{{ sale.sold_by }}</td>
@@ -74,6 +76,41 @@
                     {% else %}
                     <tr>
                         <td colspan="5" style="text-align: center;">No sales records found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Returns Report -->
+    <div class="glass-panel" style="padding: 20px;">
+        <h2 style="margin-bottom: 20px;"><i class="fas fa-undo"></i> Returns History</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Product</th>
+                        <th>Supplier</th>
+                        <th>Quantity</th>
+                        <th>Reason</th>
+                        <th>Processed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in returns %}
+                    <tr>
+                        <td>{{ item.date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ item.supplier_name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.reason }}</td>
+                        <td>{{ item.processed_by }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center;">No returns history found</td>
                     </tr>
                     {% endfor %}
                 </tbody>

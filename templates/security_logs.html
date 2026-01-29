@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}Security Firewall Logs{% endblock %}
+
+{% block content %}
+<div class="reports-container">
+    <div class="header-section glass-panel">
+        <h1><i class="fas fa-shield-alt"></i> System Firewall Logs</h1>
+        <p>Encrypted data system monitoring real-time access attempts.</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card glass-panel">
+            <i class="fas fa-lock"></i>
+            <div class="stat-info">
+                <h3>System Status</h3>
+                <p style="color: #00ff00; font-weight: bold;">SECURE / ACTIVE</p>
+            </div>
+        </div>
+        <div class="stat-card glass-panel">
+            <i class="fas fa-user-shield"></i>
+            <div class="stat-info">
+                <h3>Protection</h3>
+                <p>WAF Enabled</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container glass-panel" style="margin-top: 2rem;">
+        <h2 style="margin-bottom: 1.5rem;"><i class="fas fa-list-ul"></i> Access Logs</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>User / Identity</th>
+                    <th>IP Address</th>
+                    <th>Event</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td style="font-family: monospace; color: var(--accent-primary);">{{
+                        log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ log.username }}</td>
+                    <td style="font-family: monospace;">{{ log.ip_address }}</td>
+                    <td><span class="badge" style="background: rgba(255,255,255,0.1);">{{ log.event_type }}</span></td>
+                    <td>
+                        {% if log.status == 'Success' %}
+                        <span class="status-badge"
+                            style="background: rgba(0, 255, 0, 0.2); color: #00ff00; border: 1px solid #00ff00; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem;">
+                            <i class="fas fa-check-circle"></i> {{ log.status }}
+                        </span>
+                        {% else %}
+                        <span class="status-badge"
+                            style="background: rgba(255, 0, 0, 0.2); color: #ff3333; border: 1px solid #ff3333; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem;">
+                            <i class="fas fa-times-circle"></i> {{ log.status }}
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .badge {
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+
+    .data-table td {
+        padding: 15px;
+    }
+</style>
+{% endblock %}

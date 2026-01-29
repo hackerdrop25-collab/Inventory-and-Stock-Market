@@ -27,6 +27,11 @@
                 <input type="number" name="quantity" id="quantityInput" class="form-control" min="1" required
                     oninput="calculateTotal()">
             </div>
+            <div class="form-group">
+                <label class="form-label">Customer Name</label>
+                <input type="text" name="customer_name" class="form-control" placeholder="Optional"
+                    value="Walk-in Customer">
+            </div>
 
             <div class="glass-panel"
                 style="background: rgba(0,0,0,0.2); padding: 15px; margin-bottom: 20px; text-align: center;">
@@ -55,8 +60,11 @@
             <table id="salesTable">
                 <thead>
                     <tr>
+                        <th>S.No</th>
                         <th>Date</th>
                         <th>Product</th>
+                        <th>Supplier</th>
+                        <th>Customer</th>
                         <th>Qty</th>
                         <th>Total</th>
                         <th>Sold By</th>
@@ -65,15 +73,18 @@
                 <tbody>
                     {% for txn in transactions %}
                     <tr>
+                        <td>{{ loop.index }}</td>
                         <td>{{ txn.date.strftime('%Y-%m-%d %H:%M') }}</td>
                         <td>{{ txn.product_name }}</td>
+                        <td>{{ txn.supplier_name if txn.supplier_name else 'N/A' }}</td>
+                        <td>{{ txn.customer_name if txn.customer_name else 'N/A' }}</td>
                         <td>{{ txn.quantity }}</td>
                         <td>${{ "%.2f"|format(txn.total_price) }}</td>
                         <td>{{ txn.sold_by }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" style="text-align: center;">No transactions found</td>
+                        <td colspan="6" style="text-align: center;">No transactions found</td>
                     </tr>
                     {% endfor %}
                 </tbody>

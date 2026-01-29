@@ -5,7 +5,7 @@
 {% block content %}
 <div
     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 20px; flex-wrap: wrap;">
-    <h1>Product Inventory</h1>
+    <h1>Product</h1>
     <div style="display: flex; gap: 15px; flex-grow: 1; justify-content: flex-end; align-items: center;">
         <div class="glass-panel"
             style="padding: 5px 15px; display: flex; align-items: center; gap: 10px; flex-grow: 0; max-width: 300px;">
@@ -22,17 +22,21 @@
         <table id="productTable">
             <thead>
                 <tr>
+                    <th>S.No</th>
                     <th>Name</th>
                     <th>Category</th>
                     <th>Price</th>
                     <th>Stock</th>
                     <th>Supplier</th>
+                    {% if current_role == 'Admin' %}
                     <th>Actions</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
                 {% for product in products %}
                 <tr>
+                    <td>{{ loop.index }}</td>
                     <td>{{ product.name }}</td>
                     <td>{{ product.category }}</td>
                     <td>${{ "%.2f"|format(product.price) }}</td>
@@ -42,21 +46,24 @@
                         </span>
                     </td>
                     <td>{{ product.supplier }}</td>
+                    {% if current_role == 'Admin' %}
                     <td>
                         <button class="btn edit-btn" style="padding: 5px 10px; background: rgba(255,255,255,0.1);"
                             data-id="{{ product._id }}" data-name="{{ product.name }}"
                             data-category="{{ product.category }}" data-price="{{ product.price }}"
-                            data-quantity="{{ product.quantity }}" data-supplier="{{ product.supplier }}">
+                            data-quantity="{{ product.quantity }}" data-supplier="{{ product.supplier }}"
+                            data-serial-number="{{ product.get('serial_number', '') }}">
                             <i class="fas fa-edit"></i>
                         </button>
                         <a href="{{ url_for('delete_product', id=product._id) }}" class="btn btn-danger"
                             style="padding: 5px 10px;" onclick="return confirm('Are you sure?')"><i
                                 class="fas fa-trash"></i></a>
                     </td>
+                    {% endif %}
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" style="text-align: center;">No products found</td>
+                    <td colspan="7" style="text-align: center;">No products found</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -95,6 +102,10 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="form-group">
+                <label class="form-label">Serial Number</label>
+                <input type="text" name="serial_number" class="form-control" placeholder="e.g., SN001">
+            </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" onclick="closeModal('addModal')" class="btn"
                     style="background: rgba(255,255,255,0.1);">Cancel</button>
@@ -129,6 +140,10 @@
                 <label class="form-label">Supplier</label>
                 <input type="text" id="editSupplier" name="supplier" class="form-control" required>
             </div>
+            <div class="form-group">
+                <label class="form-label">Serial Number</label>
+                <input type="text" id="editSerialNumber" name="serial_number" class="form-control">
+            </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" onclick="closeModal('editModal')" class="btn"
                     style="background: rgba(255,255,255,0.1);">Cancel</button>
@@ -157,12 +172,14 @@
             const price = this.dataset.price;
             const quantity = this.dataset.quantity;
             const supplier = this.dataset.supplier;
+            const serialNumber = this.dataset.serialNumber;
 
             document.getElementById('editName').value = name;
             document.getElementById('editCategory').value = category;
             document.getElementById('editPrice').value = price;
             document.getElementById('editQuantity').value = quantity;
             document.getElementById('editSupplier').value = supplier;
+            document.getElementById('editSerialNumber').value = serialNumber;
 
             document.getElementById('editForm').action = "/products/update/" + id;
 
