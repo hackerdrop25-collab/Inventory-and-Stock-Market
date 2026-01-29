@@ -62,6 +62,10 @@
             });
         }, 3000);
     </script>
+    <script>
+        // Set global user role for JS access
+        window.currentRole = "{{ current_role }}";
+    </script>
     <script src="{{ url_for('static', filename='js/platform.js') }}"></script>
     <script src="{{ url_for('static', filename='js/animation.js') }}"></script>
     {% block scripts %}{% endblock %}

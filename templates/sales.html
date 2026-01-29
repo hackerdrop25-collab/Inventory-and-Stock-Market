@@ -13,13 +13,7 @@
             <div class="form-group">
                 <label class="form-label">Select Product</label>
                 <select name="product_id" id="productSelect" class="form-control" required onchange="updatePrice()">
-                    <option value="" disabled selected>Choose a product...</option>
-                    {% for product in products %}
-                    <option value="{{ product._id }}" data-price="{{ product.price }}"
-                        data-stock="{{ product.quantity }}">
-                        {{ product.name }} (Stock: {{ product.quantity }})
-                    </option>
-                    {% endfor %}
+                    <option value="" disabled selected>Loading products...</option>
                 </select>
             </div>
             <div class="form-group">
@@ -71,22 +65,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for txn in transactions %}
                     <tr>
-                        <td>{{ loop.index }}</td>
-                        <td>{{ txn.date.strftime('%Y-%m-%d %H:%M') }}</td>
-                        <td>{{ txn.product_name }}</td>
-                        <td>{{ txn.supplier_name if txn.supplier_name else 'N/A' }}</td>
-                        <td>{{ txn.customer_name if txn.customer_name else 'N/A' }}</td>
-                        <td>{{ txn.quantity }}</td>
-                        <td>${{ "%.2f"|format(txn.total_price) }}</td>
-                        <td>{{ txn.sold_by }}</td>
+                        <td colspan="8" style="text-align: center;">Loading transactions...</td>
                     </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" style="text-align: center;">No transactions found</td>
-                    </tr>
-                    {% endfor %}
                 </tbody>
             </table>
         </div>

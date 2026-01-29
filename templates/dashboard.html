@@ -8,18 +8,18 @@
 <div class="stats-grid">
     <div class="glass-panel stat-card">
         <div class="stat-title">Total Products</div>
-        <div class="stat-value">{{ total_products }}</div>
+        <div class="stat-value">...</div>
         <i class="fas fa-box" style="float: right; opacity: 0.3; font-size: 2rem; margin-top: -30px;"></i>
     </div>
     <div class="glass-panel stat-card" style="border-left-color: var(--danger-color);">
         <div class="stat-title">Low Stock Items</div>
-        <div class="stat-value">{{ low_stock }}</div>
+        <div class="stat-value">...</div>
         <i class="fas fa-exclamation-triangle"
             style="float: right; opacity: 0.3; font-size: 2rem; margin-top: -30px;"></i>
     </div>
     <div class="glass-panel stat-card" style="border-left-color: var(--success-color);">
         <div class="stat-title">Today's Revenue</div>
-        <div class="stat-value">${{ "%.2f"|format(today_revenue) }}</div>
+        <div class="stat-value">...</div>
         <i class="fas fa-dollar-sign" style="float: right; opacity: 0.3; font-size: 2rem; margin-top: -30px;"></i>
     </div>
 </div>
@@ -27,7 +27,7 @@
 <div class="glass-panel" style="padding: 20px;">
     <h2 style="margin-bottom: 1rem;">Recent Sales</h2>
     <div class="table-container">
-        <table>
+        <table id="recent-sales-table">
             <thead>
                 <tr>
                     <th>Product</th>
@@ -38,19 +38,9 @@
                 </tr>
             </thead>
             <tbody>
-                {% for sale in recent_sales %}
                 <tr>
-                    <td>{{ sale.product_name }}</td>
-                    <td>{{ sale.date.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td>{{ sale.quantity }}</td>
-                    <td>${{ "%.2f"|format(sale.total_price) }}</td>
-                    <td>{{ sale.sold_by }}</td>
+                    <td colspan="5" style="text-align: center;">Loading recent sales...</td>
                 </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" style="text-align: center;">No recent sales</td>
-                </tr>
-                {% endfor %}
             </tbody>
         </table>
     </div>

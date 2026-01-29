@@ -34,38 +34,9 @@
                 </tr>
             </thead>
             <tbody>
-                {% for product in products %}
                 <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>{{ product.name }}</td>
-                    <td>{{ product.category }}</td>
-                    <td>${{ "%.2f"|format(product.price) }}</td>
-                    <td>
-                        <span class="{{ 'text-danger' if product.quantity <= 5 else 'text-success' }}">
-                            {{ product.quantity }}
-                        </span>
-                    </td>
-                    <td>{{ product.supplier }}</td>
-                    {% if current_role == 'Admin' %}
-                    <td>
-                        <button class="btn edit-btn" style="padding: 5px 10px; background: rgba(255,255,255,0.1);"
-                            data-id="{{ product._id }}" data-name="{{ product.name }}"
-                            data-category="{{ product.category }}" data-price="{{ product.price }}"
-                            data-quantity="{{ product.quantity }}" data-supplier="{{ product.supplier }}"
-                            data-serial-number="{{ product.get('serial_number', '') }}">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <a href="{{ url_for('delete_product', id=product._id) }}" class="btn btn-danger"
-                            style="padding: 5px 10px;" onclick="return confirm('Are you sure?')"><i
-                                class="fas fa-trash"></i></a>
-                    </td>
-                    {% endif %}
+                    <td colspan="7" style="text-align: center;">Loading products...</td>
                 </tr>
-                {% else %}
-                <tr>
-                    <td colspan="7" style="text-align: center;">No products found</td>
-                </tr>
-                {% endfor %}
             </tbody>
         </table>
     </div>
@@ -94,12 +65,8 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Supplier</label>
-                <select name="supplier" class="form-control">
-                    {% for supplier in suppliers %}
-                    <option value="{{ supplier.name }}">{{ supplier.name }}</option>
-                    {% else %}
+                <select name="supplier" class="form-control" id="addSupplierSelect">
                     <option value="General">General</option>
-                    {% endfor %}
                 </select>
             </div>
             <div class="form-group">
@@ -164,27 +131,6 @@
         document.getElementById(id).classList.remove('active');
     }
 
-    document.querySelectorAll('.edit-btn').forEach(button => {
-        button.addEventListener('click', function () {
-            const id = this.dataset.id;
-            const name = this.dataset.name;
-            const category = this.dataset.category;
-            const price = this.dataset.price;
-            const quantity = this.dataset.quantity;
-            const supplier = this.dataset.supplier;
-            const serialNumber = this.dataset.serialNumber;
-
-            document.getElementById('editName').value = name;
-            document.getElementById('editCategory').value = category;
-            document.getElementById('editPrice').value = price;
-            document.getElementById('editQuantity').value = quantity;
-            document.getElementById('editSupplier').value = supplier;
-            document.getElementById('editSerialNumber').value = serialNumber;
-
-            document.getElementById('editForm').action = "/products/update/" + id;
-
-            openModal('editModal');
-        });
-    });
+    // Custom logic to populate addSupplierSelect if needed (otherwise handled by platform.js or rendered partially)
 </script>
 {% endblock %}

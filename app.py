@@ -424,5 +424,101 @@ def reports():
                            chart_labels=chart_labels,
                            chart_data=chart_data)
 
+# --- API Routes ---
+
+@app.route('/api/summary')
+@login_required
+def api_summary():
+    total_products = products_collection.count_documents({})
+    low_stock = products_collection.count_documents({'quantity': {'$lte': 5}})
+    
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_sales = sales_collection.aggregate([
+        {'$match': {'date': {'$gte': today_start}}},
+        {'$group': {'_id': None, 'total': {'$sum': '$total_price'}}}
+    ])
+    today_revenue = list(today_sales)[0]['total'] if today_sales else 0
+    
+    recent_sales = list(sales_collection.find().sort('date', -1).limit(5))
+    for s in recent_sales:
+        s['_id'] = str(s['_id'])
+        s['product_id'] = str(s['product_id'])
+        s['date'] = s['date'].strftime('%Y-%m-%d %H:%M')
+        
+    return jsonify({
+        'total_products': total_products,
+        'low_stock': low_stock,
+        'today_revenue': today_revenue,
+        'recent_sales': recent_sales
+    })
+
+@app.route('/api/products')
+@login_required
+def api_products():
+    products_list = list(products_collection.find())
+    for p in products_list:
+        p['_id'] = str(p['_id'])
+    
+    suppliers_list = list(suppliers_collection.find())
+    for s in suppliers_list:
+        s['_id'] = str(s['_id'])
+        
+    return jsonify({'products': products_list, 'suppliers': suppliers_list})
+
+@app.route('/api/sales')
+@login_required
+def api_sales():
+    products_list = list(products_collection.find())
+    for p in products_list:
+        p['_id'] = str(p['_id'])
+        
+    transactions = list(sales_collection.find().sort('date', -1).limit(10))
+    for t in transactions:
+        t['_id'] = str(t['_id'])
+        t['product_id'] = str(t['product_id'])
+        t['date'] = t['date'].strftime('%Y-%m-%d %H:%M')
+        
+    return jsonify({'products': products_list, 'transactions': transactions})
+
+@app.route('/api/suppliers')
+@login_required
+@admin_required
+def api_suppliers():
+    suppliers_list = list(suppliers_collection.find())
+    for s in suppliers_list:
+        s['_id'] = str(s['_id'])
+    return jsonify({'suppliers': suppliers_list})
+
+@app.route('/api/reports')
+@login_required
+def api_reports():
+    # Similar logic to /reports but returning JSON
+    prod_filter = {'quantity': {'$lte': 5}}
+    if session.get('role') != 'Admin':
+        prod_filter['added_by'] = session['user']
+        
+    low_stock = list(products_collection.find(prod_filter))
+    for p in low_stock: p['_id'] = str(p['_id'])
+    
+    # Chart data
+    seven_days_ago = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=7)
+    chart_match = {'date': {'$gte': seven_days_ago}}
+    if session.get('role') != 'Admin': chart_match['sold_by'] = session['user']
+    
+    daily_sales = list(sales_collection.aggregate([
+        {'$match': chart_match},
+        {'$group': {
+            '_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$date'}},
+            'total': {'$sum': '$total_price'}
+        }},
+        {'$sort': {'_id': 1}}
+    ]))
+    
+    return jsonify({
+        'low_stock': low_stock,
+        'chart_labels': [d['_id'] for d in daily_sales],
+        'chart_data': [d['total'] for d in daily_sales]
+    })
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
