@@ -33,6 +33,7 @@
             <a href="{{ url_for('products') }}" class="nav-link"><i class="fas fa-box-open"></i> Products</a>
             <a href="{{ url_for('sales') }}" class="nav-link"><i class="fas fa-shopping-cart"></i> Sales</a>
             <a href="{{ url_for('reports') }}" class="nav-link"><i class="fas fa-file-alt"></i> Reports</a>
+            <a href="{{ url_for('market') }}" class="nav-link"><i class="fas fa-globe"></i> Global Markets</a>
             {% if current_role == 'Admin' %}
             <a href="{{ url_for('returns') }}" class="nav-link"><i class="fas fa-undo"></i> Returns</a>
             <a href="{{ url_for('suppliers') }}" class="nav-link"><i class="fas fa-truck"></i> Suppliers</a>

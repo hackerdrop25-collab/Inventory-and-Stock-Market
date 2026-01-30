@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from datetime import datetime
 import os
+from market_utils import get_market_summary
 
 app = Flask(__name__)
 app.secret_key = "super_secret_inventory_key"
@@ -519,6 +520,20 @@ def api_reports():
         'chart_labels': [d['_id'] for d in daily_sales],
         'chart_data': [d['total'] for d in daily_sales]
     })
+
+@app.route('/market')
+@login_required
+def market():
+    return render_template('market.html')
+
+@app.route('/api/market')
+@login_required
+def api_market_data():
+    try:
+        data = get_market_summary()
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
