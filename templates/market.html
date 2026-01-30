@@ -6,6 +6,14 @@
     <p class="subtitle">Real-time overview of major world indices</p>
 </div>
 
+<div class="search-container" style="margin-bottom: 2rem; display: flex; gap: 10px;">
+    <input type="text" id="btc-search" placeholder="Search Symbol (e.g. AAPL, TSLA)" class="form-control"
+        style="max-width: 300px; padding: 10px; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border-color); border-radius: 8px;">
+    <button onclick="searchStock()" class="btn btn-primary" style="padding: 10px 20px;">
+        <i class="fas fa-search"></i> Search
+    </button>
+</div>
+
 <div class="market-grid">
     <!-- Cards will be populated here -->
     <div id="loading" style="text-align: center; width: 100%; grid-column: 1 / -1;">
@@ -94,30 +102,62 @@
                     return;
                 }
 
-                data.forEach(item => {
-                    const isPositive = item.change >= 0;
-                    const colorClass = isPositive ? 'positive' : 'negative';
-                    const sign = isPositive ? '+' : '';
-
-                    const card = document.createElement('div');
-                    card.className = 'market-card';
-                    card.innerHTML = `
-                        <div class="market-header">
-                            <span class="symbol">${item.symbol}</span>
-                            <span class="${colorClass}">${sign}${item.change_percent}%</span>
-                        </div>
-                        <div class="name">${item.name}</div>
-                        <div class="price">${item.price.toLocaleString()}</div>
-                        <div class="change-container ${colorClass}">
-                            <span>${sign}${item.change}</span>
-                        </div>
-                    `;
-                    grid.appendChild(card);
-                });
+                data.forEach(item => createMarketCard(item, grid));
             })
             .catch(err => {
                 console.error('Error:', err);
-                document.getElementById('loading').innerHTML = '<p>Failed to load market data.</p>';
+                const grid = document.querySelector('.market-grid');
+                if (grid) grid.innerHTML = '<p>Failed to load market data.</p>';
+            });
+    }
+
+    function createMarketCard(item, container) {
+        const isPositive = item.change >= 0;
+        const colorClass = isPositive ? 'positive' : 'negative';
+        const sign = isPositive ? '+' : '';
+
+        const card = document.createElement('div');
+        card.className = 'market-card';
+        card.innerHTML = `
+            <div class="market-header">
+                <span class="symbol">${item.symbol}</span>
+                <span class="${colorClass}">${sign}${item.change_percent}%</span>
+            </div>
+            <div class="name">${item.name}</div>
+            <div class="price">${item.price.toLocaleString()}</div>
+            <div class="change-container ${colorClass}">
+                <span>${sign}${item.change}</span>
+            </div>
+        `;
+        container.appendChild(card);
+    }
+
+    function searchStock() {
+        const symbol = document.getElementById('btc-search').value.toUpperCase();
+        if (!symbol) return;
+
+        const btn = document.querySelector('button[onclick="searchStock()"]');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        fetch(`/api/market/search?symbol=${symbol}`)
+            .then(res => res.json())
+            .then(data => {
+                btn.innerHTML = originalText;
+                if (data.error) {
+                    alert('Stock not found: ' + data.error);
+                } else {
+                    const grid = document.querySelector('.market-grid');
+                    // Add to top
+                    createMarketCard(data, grid);
+                    if (grid.firstChild && grid.lastChild !== grid.firstChild) {
+                        grid.insertBefore(grid.lastChild, grid.firstChild);
+                    }
+                }
+            })
+            .catch(err => {
+                btn.innerHTML = originalText;
+                alert('Error searching stock');
             });
     }
 </script>

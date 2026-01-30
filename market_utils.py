@@ -67,3 +67,58 @@ def get_symbol_name(symbol):
         'BTC-USD': 'Bitcoin'
     }
     return names.get(symbol, symbol)
+
+def get_stock_data(symbol):
+    """
+    Fetches real-time data for a specific stock symbol.
+    """
+    try:
+        # Validate symbol (basic alphanumeric check)
+        if not symbol.replace('.','').replace('-','').isalnum():
+            return {'error': 'Invalid symbol format'}
+            
+        ticker = yf.Ticker(symbol)
+        info = ticker.fast_info
+        
+        price = info.last_price
+        prev_close = info.previous_close
+        
+        if price is None:
+             # Fallback to history for some tickers if fast_info fails
+            hist = ticker.history(period="1d")
+            if not hist.empty:
+                price = hist['Close'].iloc[-1]
+                prev_close = hist['Open'].iloc[-1] # Approximation for intraday change if prev_close missing
+        
+        if price:
+            change = 0
+            change_percent = 0
+            if prev_close:
+                change = price - prev_close
+                change_percent = (change / prev_close) * 100
+            
+            # Try to get short name, fallback to symbol
+            name = symbol
+            try:
+                # Some versions of yfinance put metadata in .info dict which triggers a separate request
+                # We'll try to keep it fast, but if we need name, we might need .info
+                # maximizing speed: use symbol as name if fetching full info is too slow/rate-limited
+                # let's try getting name from ticker.info only if needed, or just use symbol
+                name = ticker.info.get('shortName', symbol) 
+            except:
+                pass
+
+            return {
+                'symbol': symbol.upper(),
+                'name': name,
+                'price': round(price, 2),
+                'change': round(change, 2),
+                'change_percent': round(change_percent, 2),
+                'color': 'green' if change >= 0 else 'red'
+            }
+        else:
+             return {'error': 'Data not found for symbol'}
+
+    except Exception as e:
+        print(f"Error fetching {symbol}: {e}")
+        return {'error': str(e)}

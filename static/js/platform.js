@@ -147,6 +147,19 @@ class Platform {
             statsValues[2].textContent = `$${data.today_revenue.toFixed(2)}`;
         }
 
+        // Fetch Market Data for Widget
+        this.fetchApi('/market/search?symbol=^GSPC').then(marketData => {
+            const marketValue = document.getElementById('market-widget-value');
+            const marketSub = document.getElementById('market-widget-sub');
+            if (marketValue && marketData && !marketData.error) {
+                marketValue.textContent = marketData.price.toLocaleString();
+                const sign = marketData.change >= 0 ? '+' : '';
+                marketSub.innerHTML = `S&P 500 <span style="color: ${marketData.change >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">(${sign}${marketData.change_percent}%)</span>`;
+            } else if (marketValue) {
+                marketValue.textContent = "Unavailable";
+            }
+        });
+
         const recentSalesBody = document.querySelector('#recent-sales-table tbody');
         if (recentSalesBody) {
             recentSalesBody.innerHTML = data.recent_sales.map(sale => `

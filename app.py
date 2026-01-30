@@ -535,5 +535,18 @@ def api_market_data():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/market/search')
+@login_required
+def api_market_search():
+    symbol = request.args.get('symbol')
+    if not symbol:
+        return jsonify({'error': 'No symbol provided'}), 400
+    
+    # Import here to avoid circular dependency if any, or just ensure it's available
+    from market_utils import get_stock_data
+    
+    data = get_stock_data(symbol)
+    return jsonify(data)
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
