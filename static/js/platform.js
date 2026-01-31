@@ -42,6 +42,11 @@ class Platform {
         } else if (path === '/sales') {
             const data = await this.fetchApi('/sales');
             if (data) this.renderSales(data);
+        } else if (path === '/market') {
+            this.setupMarketSearch();
+            this.loadMarketPage();
+            // Real-time polling every 30s
+            setInterval(() => this.loadMarketPage(), 30000);
         }
     }
 
@@ -231,6 +236,9 @@ class Platform {
     /**
      * Adds dynamic search functionality to all tables with a search input
      */
+    /**
+     * Adds dynamic search functionality to all tables with a search input
+     */
     setupTableSearch() {
         const searchInputs = document.querySelectorAll('.table-search');
         searchInputs.forEach(input => {
@@ -244,6 +252,158 @@ class Platform {
                     const text = row.textContent.toLowerCase();
                     row.style.display = text.includes(term) ? '' : 'none';
                 });
+            });
+        });
+    }
+
+    setupMarketSearch() {
+        const searchBtn = document.getElementById('marketSearchBtn');
+        const searchInput = document.getElementById('marketSearchInput');
+
+        if (searchBtn && searchInput) {
+            const performSearch = async () => {
+                const symbol = searchInput.value.toUpperCase();
+                if (!symbol) return;
+
+                searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                try {
+                    const data = await this.fetchApi(`/market/search?symbol=${symbol}`);
+                    searchBtn.innerHTML = 'Search';
+
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        this.renderSearchResult(data);
+                    }
+                } catch (e) {
+                    searchBtn.innerHTML = 'Search';
+                    console.error(e);
+                }
+            };
+
+            searchBtn.addEventListener('click', performSearch);
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') performSearch();
+            });
+        }
+    }
+
+    renderSearchResult(item) {
+        const container = document.getElementById('searchResults');
+        if (!container) return;
+
+        container.style.display = 'block';
+        container.innerHTML = ''; // Clear previous
+
+        const isPositive = item.change >= 0;
+        const colorClass = isPositive ? 'text-success' : 'text-danger';
+        const sign = isPositive ? '+' : '';
+
+        container.innerHTML = `
+            <div class="market-card search-result-card" style="border-color: var(--primary-color);">
+                <div class="market-header">
+                    <span class="symbol">${item.symbol}</span>
+                    <button class="btn btn-sm btn-primary" onclick="platform.addToWatchlist('${item.symbol}')">
+                        <i class="fas fa-plus"></i> Watch
+                    </button>
+                </div>
+                <div class="name">${item.name}</div>
+                <div class="price">$${item.price.toLocaleString()}</div>
+                <div class="change-container ${colorClass}">
+                    <span>${sign}${item.change} (${sign}${item.change_percent}%)</span>
+                </div>
+            </div>
+        `;
+    }
+
+    async addToWatchlist(symbol) {
+        try {
+            await fetch(`${this.apiBase}/market/watchlist`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ symbol: symbol })
+            });
+            // Refresh watchlist
+            this.loadMarketPage();
+            // Clear search result
+            const container = document.getElementById('searchResults');
+            if (container) container.style.display = 'none';
+        } catch (e) {
+            console.error('Error adding to watchlist', e);
+        }
+    }
+
+    async removeFromWatchlist(symbol) {
+        if (!confirm(`Remove ${symbol} from watchlist?`)) return;
+        try {
+            await fetch(`${this.apiBase}/market/watchlist?symbol=${symbol}`, {
+                method: 'DELETE'
+            });
+            this.loadMarketPage();
+        } catch (e) {
+            console.error('Error removing from watchlist', e);
+        }
+    }
+
+    async loadMarketPage() {
+        // Load Global Indices
+        const globalData = await this.fetchApi('/market');
+        const watchlistData = await this.fetchApi('/market/watchlist');
+
+        this.renderMarketList('globalIndices', globalData);
+        this.renderMarketList('userWatchlist', watchlistData);
+    }
+
+    renderMarketList(elementId, data) {
+        const container = document.getElementById(elementId);
+        if (!container) return;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No data available.</p>';
+            return;
+        }
+
+        container.innerHTML = data.map(item => {
+            const isPositive = item.change >= 0;
+            const colorClass = isPositive ? 'positive' : 'negative';
+            const sign = isPositive ? '+' : '';
+            const isWatchlist = elementId === 'userWatchlist';
+
+            return `
+            <div class="market-card" data-symbol="${item.symbol}">
+                <div class="market-header">
+                    <span class="symbol">${item.symbol}</span>
+                    <span class="${colorClass}">${sign}${item.change_percent}%</span>
+                </div>
+                <div class="name">${item.name}</div>
+                <div class="price">${item.price.toLocaleString()}</div>
+                <div class="change-container ${colorClass}">
+                    <span>${sign}${item.change}</span>
+                </div>
+                ${isWatchlist ? `
+                <button class="btn-icon delete-btn" onclick="platform.removeFromWatchlist('${item.symbol}')" 
+                    style="position: absolute; top: 10px; right: 10px; opacity: 0.5;">
+                    <i class="fas fa-times"></i>
+                </button>
+                ` : ''}
+            </div>
+            `;
+        }).join('');
+    }
+
+    /**
+     * Minor visual enhancements and micro-interactions
+     */
+    enhanceVisuals() {
+        // Add hover sound or subtle feedback if needed
+        // For now, just ensure glass containers are accessible
+        document.querySelectorAll('.glass-panel').forEach(panel => {
+            panel.addEventListener('mouseenter', () => {
+                panel.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            });
+            panel.addEventListener('mouseleave', () => {
+                panel.style.borderColor = 'rgba(255, 255, 255, 0.1)';
             });
         });
     }
@@ -294,22 +454,6 @@ class Platform {
         if (theme === 'light') icon.className = 'fas fa-sun';
         else if (theme === 'dark') icon.className = 'fas fa-moon';
         else icon.className = 'fas fa-shield-alt';
-    }
-
-    /**
-     * Minor visual enhancements and micro-interactions
-     */
-    enhanceVisuals() {
-        // Add hover sound or subtle feedback if needed
-        // For now, just ensure glass containers are accessible
-        document.querySelectorAll('.glass-panel').forEach(panel => {
-            panel.addEventListener('mouseenter', () => {
-                panel.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-            });
-            panel.addEventListener('mouseleave', () => {
-                panel.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-            });
-        });
     }
 }
 

@@ -3,75 +3,98 @@
 {% block content %}
 <div class="header-section">
     <h1>Global Markets</h1>
-    <p class="subtitle">Real-time overview of major world indices</p>
+    <p class="subtitle">Real-time overview of major world indices & Your Watchlist</p>
 </div>
 
-<div class="search-container" style="margin-bottom: 2rem; display: flex; gap: 10px;">
-    <input type="text" id="btc-search" placeholder="Search Symbol (e.g. AAPL, TSLA)" class="form-control"
-        style="max-width: 300px; padding: 10px; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border-color); border-radius: 8px;">
-    <button onclick="searchStock()" class="btn btn-primary" style="padding: 10px 20px;">
-        <i class="fas fa-search"></i> Search
-    </button>
+<!-- Search Section -->
+<div class="search-section glass-panel" style="padding: 20px; margin-bottom: 30px;">
+    <div style="display: flex; gap: 10px; max-width: 600px;">
+        <input type="text" id="marketSearchInput" class="form-control"
+            placeholder="Search Symbol (e.g. AAPL, TSLA, BTC-USD)">
+        <button id="marketSearchBtn" class="btn btn-primary">Search</button>
+    </div>
+    <!-- Search Results Container -->
+    <div id="searchResults" style="margin-top: 20px; display: none;"></div>
 </div>
 
-<div class="market-grid">
-    <!-- Cards will be populated here -->
-    <div id="loading" style="text-align: center; width: 100%; grid-column: 1 / -1;">
-        <p>Loading market data...</p>
+<!-- User Watchlist -->
+<div class="market-section">
+    <h3 style="margin-bottom: 15px; border-bottom: 2px solid var(--primary-color); display: inline-block;">My Watchlist
+    </h3>
+    <div id="userWatchlist" class="market-grid">
+        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+    </div>
+</div>
+
+<!-- Global Indices -->
+<div class="market-section" style="margin-top: 40px;">
+    <h3 style="margin-bottom: 15px; border-bottom: 2px solid var(--secondary-color); display: inline-block;">Global
+        Indices</h3>
+    <div id="globalIndices" class="market-grid">
+        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
     </div>
 </div>
 
 <style>
     .market-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 20px;
-        padding: 20px 0;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 25px;
     }
 
     .market-card {
         background: var(--card-bg);
         border: 1px solid var(--border-color);
-        border-radius: 12px;
+        border-radius: 16px;
         padding: 20px;
-        transition: transform 0.2s;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
     }
 
     .market-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+        border-color: var(--primary-color);
     }
 
     .market-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
     }
 
     .symbol {
-        font-size: 0.9em;
+        font-weight: 800;
         color: var(--text-muted);
-        font-weight: 600;
+        letter-spacing: 1px;
     }
 
     .name {
-        font-size: 1.2em;
-        font-weight: 700;
-        margin-bottom: 5px;
-        color: var(--text-color);
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 15px;
+        height: 1.4em;
+        /* limit height */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .price {
-        font-size: 1.5em;
+        font-size: 1.8rem;
         font-weight: 700;
         margin-bottom: 5px;
     }
 
     .change-container {
-        display: flex;
-        gap: 10px;
         font-weight: 600;
+        font-size: 0.9rem;
+        padding: 5px 10px;
+        border-radius: 20px;
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.05);
     }
 
     .positive {
@@ -81,84 +104,20 @@
     .negative {
         color: #f87171;
     }
+
+    .text-success {
+        color: #4ade80;
+    }
+
+    .text-danger {
+        color: #f87171;
+    }
+
+    .loading-spinner {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 20px;
+        color: var(--text-muted);
+    }
 </style>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        fetchMarketData();
-        // Refresh every 60 seconds
-        setInterval(fetchMarketData, 60000);
-    });
-
-    function fetchMarketData() {
-        fetch('/api/market')
-            .then(response => response.json())
-            .then(data => {
-                const grid = document.querySelector('.market-grid');
-                grid.innerHTML = '';
-
-                if (data.error) {
-                    grid.innerHTML = `<p class="error">Error loading data: ${data.error}</p>`;
-                    return;
-                }
-
-                data.forEach(item => createMarketCard(item, grid));
-            })
-            .catch(err => {
-                console.error('Error:', err);
-                const grid = document.querySelector('.market-grid');
-                if (grid) grid.innerHTML = '<p>Failed to load market data.</p>';
-            });
-    }
-
-    function createMarketCard(item, container) {
-        const isPositive = item.change >= 0;
-        const colorClass = isPositive ? 'positive' : 'negative';
-        const sign = isPositive ? '+' : '';
-
-        const card = document.createElement('div');
-        card.className = 'market-card';
-        card.innerHTML = `
-            <div class="market-header">
-                <span class="symbol">${item.symbol}</span>
-                <span class="${colorClass}">${sign}${item.change_percent}%</span>
-            </div>
-            <div class="name">${item.name}</div>
-            <div class="price">${item.price.toLocaleString()}</div>
-            <div class="change-container ${colorClass}">
-                <span>${sign}${item.change}</span>
-            </div>
-        `;
-        container.appendChild(card);
-    }
-
-    function searchStock() {
-        const symbol = document.getElementById('btc-search').value.toUpperCase();
-        if (!symbol) return;
-
-        const btn = document.querySelector('button[onclick="searchStock()"]');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-        fetch(`/api/market/search?symbol=${symbol}`)
-            .then(res => res.json())
-            .then(data => {
-                btn.innerHTML = originalText;
-                if (data.error) {
-                    alert('Stock not found: ' + data.error);
-                } else {
-                    const grid = document.querySelector('.market-grid');
-                    // Add to top
-                    createMarketCard(data, grid);
-                    if (grid.firstChild && grid.lastChild !== grid.firstChild) {
-                        grid.insertBefore(grid.lastChild, grid.firstChild);
-                    }
-                }
-            })
-            .catch(err => {
-                btn.innerHTML = originalText;
-                alert('Error searching stock');
-            });
-    }
-</script>
 {% endblock %}

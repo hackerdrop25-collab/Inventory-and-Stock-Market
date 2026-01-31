@@ -548,5 +548,46 @@ def api_market_search():
     data = get_stock_data(symbol)
     return jsonify(data)
 
+@app.route('/api/market/watchlist', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def api_watchlist():
+    user_query = {'username': session['user']}
+    
+    if request.method == 'GET':
+        from market_utils import get_stock_data
+        
+        user = users_collection.find_one(user_query)
+        watchlist = user.get('watchlist', [])
+        
+        # Always include major indices if watchlist is empty, or just return empty?
+        # Let's return the user's list. Frontend can handle defaults.
+        
+        data = []
+        for symbol in watchlist:
+            stock_data = get_stock_data(symbol)
+            if not stock_data.get('error'):
+                data.append(stock_data)
+                
+        return jsonify(data)
+
+    if request.method == 'POST':
+        data = request.get_json()
+        symbol = data.get('symbol').upper()
+        
+        users_collection.update_one(
+            user_query, 
+            {'$addToSet': {'watchlist': symbol}}
+        )
+        return jsonify({'success': True, 'message': f'{symbol} added to watchlist'})
+
+    if request.method == 'DELETE':
+        symbol = request.args.get('symbol').upper()
+        
+        users_collection.update_one(
+            user_query,
+            {'$pull': {'watchlist': symbol}}
+        )
+        return jsonify({'success': True, 'message': f'{symbol} removed from watchlist'})
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
