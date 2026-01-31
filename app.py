@@ -589,5 +589,143 @@ def api_watchlist():
         )
         return jsonify({'success': True, 'message': f'{symbol} removed from watchlist'})
 
+@app.route('/api/market/portfolio', methods=['GET'])
+@login_required
+def api_portfolio():
+    user = users_collection.find_one({'username': session['user']})
+    
+    # Initialize wallet if not exists
+    if 'wallet' not in user:
+        users_collection.update_one(
+            {'username': session['user']},
+            {'$set': {'wallet': 10000.0, 'portfolio': [], 'transactions': []}}
+        )
+        return api_portfolio() # Retry once
+        
+    portfolio = user.get('portfolio', [])
+    
+    # Calculate current value
+    from market_utils import get_stock_data
+    
+    total_value = 0
+    updated_portfolio = []
+    
+    for item in portfolio:
+        stock = get_stock_data(item['symbol'])
+        if not stock.get('error'):
+            current_price = stock['price']
+            current_val = current_price * item['quantity']
+            total_value += current_val
+            
+            # Add realtime data to item for frontend
+            item['current_price'] = current_price
+            item['current_value'] = current_val
+            item['pl'] = current_val - (item['avg_price'] * item['quantity'])
+            item['pl_percent'] = (item['pl'] / (item['avg_price'] * item['quantity'])) * 100 if item['avg_price'] else 0
+            
+        updated_portfolio.append(item)
+        
+    return jsonify({
+        'wallet': user.get('wallet', 10000.0),
+        'portfolio_value': total_value,
+        'total_account_value': user.get('wallet', 10000.0) + total_value,
+        'portfolio': updated_portfolio,
+        'transactions': user.get('transactions', [])
+    })
+
+@app.route('/api/market/trade', methods=['POST'])
+@login_required
+def api_trade():
+    """
+    Handle Buy/Sell orders
+    Payload: { symbol: 'AAPL', quantity: 10, type: 'BUY'|'SELL' }
+    """
+    data = request.get_json()
+    symbol = data.get('symbol').upper()
+    quantity = int(data.get('quantity', 0))
+    trade_type = data.get('type').upper()
+    
+    if quantity <= 0:
+        return jsonify({'error': 'Invalid quantity'}), 400
+        
+    # Get Real Price
+    from market_utils import get_stock_data
+    stock = get_stock_data(symbol)
+    if stock.get('error'):
+        return jsonify({'error': 'Failed to get stock price'}), 400
+        
+    price = stock['price']
+    total_cost = price * quantity
+    
+    user = users_collection.find_one({'username': session['user']})
+    wallet = user.get('wallet', 10000.0)
+    portfolio = user.get('portfolio', [])
+    
+    if trade_type == 'BUY':
+        if wallet < total_cost:
+            return jsonify({'error': 'Insufficient funds'}), 400
+            
+        # Update Wallet
+        new_wallet = wallet - total_cost
+        
+        # Update Portfolio
+        existing_item = next((item for item in portfolio if item['symbol'] == symbol), None)
+        if existing_item:
+            # Avg Price Calculation
+            old_qty = existing_item['quantity']
+            old_avg = existing_item['avg_price']
+            new_qty = old_qty + quantity
+            new_avg = ((old_qty * old_avg) + total_cost) / new_qty
+            
+            existing_item['quantity'] = new_qty
+            existing_item['avg_price'] = new_avg
+        else:
+            portfolio.append({
+                'symbol': symbol,
+                'quantity': quantity,
+                'avg_price': price
+            })
+            
+    elif trade_type == 'SELL':
+        existing_item = next((item for item in portfolio if item['symbol'] == symbol), None)
+        if not existing_item or existing_item['quantity'] < quantity:
+            return jsonify({'error': 'Insufficient holdings'}), 400
+            
+        # Update Wallet
+        new_wallet = wallet + total_cost
+        
+        # Update Portfolio
+        existing_item['quantity'] -= quantity
+        if existing_item['quantity'] == 0:
+            portfolio.remove(existing_item)
+            
+    else:
+        return jsonify({'error': 'Invalid trade type'}), 400
+        
+    # Record Transaction
+    transaction = {
+        'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'symbol': symbol,
+        'type': trade_type,
+        'quantity': quantity,
+        'price': price,
+        'total': total_cost
+    }
+    
+    users_collection.update_one(
+        {'username': session['user']},
+        {
+            '$set': {'wallet': new_wallet, 'portfolio': portfolio},
+            '$push': {'transactions': transaction}
+        }
+    )
+    
+    return jsonify({
+        'success': True, 
+        'message': f'Successfully {trade_type} {quantity} {symbol} @ ${price}',
+        'new_balance': new_wallet,
+        'portfolio': portfolio
+    })
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
