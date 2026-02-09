@@ -6,40 +6,61 @@
 <div
     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; gap: 20px; flex-wrap: wrap;">
     <h1>Suppliers</h1>
-    <div style="display: flex; gap: 15px; flex-grow: 1; justify-content: flex-end; align-items: center;">
-        <div class="glass-panel"
-            style="padding: 5px 15px; display: flex; align-items: center; gap: 10px; flex-grow: 0; max-width: 300px;">
-            <i class="fas fa-search" style="color: var(--text-secondary);"></i>
-            <input type="text" class="table-search" data-table="supplierTable" placeholder="Search suppliers..."
-                style="background: transparent; border: none; color: white; outline: none; padding: 5px; width: 100%;">
+    <button onclick="openModal('addSupplierModal')" class="btn btn-primary"><i class="fas fa-plus"></i> Add Supplier</button>
+</div>
+
+<!-- Search Section -->
+<div class="glass-panel" style="padding: 20px; margin-bottom: 2rem;">
+    <h3 style="margin-bottom: 1rem;">Search Suppliers</h3>
+    <form method="GET" style="display: flex; gap: 15px; align-items: flex-end;">
+        <div class="form-group" style="margin: 0; flex: 1;">
+            <input type="text" name="search" value="{{ search_query }}" class="form-control" 
+                placeholder="Search by name, contact, or email...">
         </div>
-        <button onclick="openModal('addSupplierModal')" class="btn btn-primary"><i class="fas fa-plus"></i> Add
-            Supplier</button>
-    </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+        <a href="{{ url_for('suppliers') }}" class="btn" style="background: rgba(255,255,255,0.1);">
+            <i class="fas fa-redo"></i> Clear
+        </a>
+    </form>
 </div>
 
 <div class="glass-panel" style="padding: 20px;">
+    <div style="margin-bottom: 15px;">
+        <strong style="color: var(--text-secondary);">Total Suppliers: {{ suppliers|length }}</strong>
+    </div>
     <div class="table-container">
         <table id="supplierTable">
             <thead>
                 <tr>
-                    <th>Name</th>
+                    <th>S.No</th>
+                    <th>Company Name</th>
                     <th>Contact Person</th>
                     <th>Email</th>
                     <th>Address</th>
+                    <th>Added Date</th>
                 </tr>
             </thead>
             <tbody>
+                {% set counter = namespace(value=1) %}
                 {% for supplier in suppliers %}
                 <tr>
-                    <td>{{ supplier.name }}</td>
+                    <td>{{ counter.value }}</td>
+                    <td><strong>{{ supplier.name }}</strong></td>
                     <td>{{ supplier.contact }}</td>
-                    <td>{{ supplier.email }}</td>
+                    <td>
+                        <a href="mailto:{{ supplier.email }}" style="color: var(--primary-color); text-decoration: none;">
+                            {{ supplier.email }}
+                        </a>
+                    </td>
                     <td>{{ supplier.address }}</td>
+                    <td>{{ supplier.added_at.strftime('%Y-%m-%d') if supplier.get('added_at') else 'N/A' }}</td>
                 </tr>
+                {% set counter.value = counter.value + 1 %}
                 {% else %}
                 <tr>
-                    <td colspan="4" style="text-align: center;">No suppliers found</td>
+                    <td colspan="6" style="text-align: center; padding: 20px;">
+                        No suppliers found. <a href="{{ url_for('suppliers') }}" style="color: var(--primary-color);">View all</a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -51,22 +72,24 @@
 <div id="addSupplierModal" class="modal">
     <div class="glass-panel modal-content" style="padding: 30px;">
         <h2 style="margin-bottom: 20px;">Add New Supplier</h2>
-        <form method="POST">
+        <form method="POST" id="addSupplierForm">
             <div class="form-group">
-                <label class="form-label">Company Name</label>
-                <input type="text" name="name" class="form-control" required>
+                <label class="form-label">Company Name <span style="color: var(--danger-color);">*</span></label>
+                <input type="text" name="name" class="form-control" placeholder="e.g., ABC Suppliers Inc." required>
+                <small style="color: var(--text-secondary);">Minimum 2 characters</small>
             </div>
             <div class="form-group">
-                <label class="form-label">Contact Person</label>
-                <input type="text" name="contact" class="form-control" required>
+                <label class="form-label">Contact Person <span style="color: var(--danger-color);">*</span></label>
+                <input type="text" name="contact" class="form-control" placeholder="e.g., +1-800-123-4567" required>
             </div>
             <div class="form-group">
-                <label class="form-label">Email</label>
-                <input type="email" name="email" class="form-control" required>
+                <label class="form-label">Email <span style="color: var(--danger-color);">*</span></label>
+                <input type="email" name="email" class="form-control" placeholder="supplier@company.com" required>
             </div>
             <div class="form-group">
-                <label class="form-label">Address</label>
-                <textarea name="address" class="form-control" rows="3" required></textarea>
+                <label class="form-label">Address <span style="color: var(--danger-color);">*</span></label>
+                <textarea name="address" class="form-control" rows="3" placeholder="Full address" required></textarea>
+                <small style="color: var(--text-secondary);">Minimum 5 characters</small>
             </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" onclick="closeModal('addSupplierModal')" class="btn"
@@ -76,6 +99,63 @@
         </form>
     </div>
 </div>
+
+<style>
+.form-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 15px;
+}
+
+.form-label {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.form-control {
+    padding: 12px 15px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-primary);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: rgba(66, 133, 244, 0.1);
+}
+
+.form-control:hover {
+    border-color: rgba(255,255,255,0.2);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table th {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+table td {
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+</style>
 
 <script>
     function openModal(id) {

@@ -18,6 +18,7 @@ class Platform {
     }
 
     async fetchApi(endpoint) {
+        if (window.nexusAnimation) window.nexusAnimation.onEvent('refresh', { endpoint });
         try {
             const response = await fetch(`${this.apiBase}${endpoint}`);
             if (!response.ok) throw new Error('Network response was not ok');
@@ -67,6 +68,7 @@ class Platform {
         // Populate Recent Transactions
         const salesTableBody = document.querySelector('#salesTable tbody');
         if (salesTableBody) {
+            const oldTransactionsCount = salesTableBody.querySelectorAll('tr').length;
             salesTableBody.innerHTML = data.transactions.map((txn, index) => `
                 <tr>
                     <td>${index + 1}</td>
@@ -79,6 +81,11 @@ class Platform {
                     <td>${txn.sold_by}</td>
                 </tr>
             `).join('') || '<tr><td colspan="8" style="text-align: center;">No transactions found</td></tr>';
+
+            // Trigger sale pulse if a new transaction appeared
+            if (data.transactions.length > oldTransactionsCount && window.nexusAnimation) {
+                window.nexusAnimation.onEvent('sale', { amount: data.transactions[0].total_price });
+            }
         }
     }
 
@@ -150,6 +157,11 @@ class Platform {
             statsValues[0].textContent = data.total_products;
             statsValues[1].textContent = data.low_stock;
             statsValues[2].textContent = `$${data.today_revenue.toFixed(2)}`;
+
+            // Trigger alert if low stock is significant
+            if (data.low_stock > 0 && window.nexusAnimation) {
+                window.nexusAnimation.onEvent('low_stock', { count: data.low_stock });
+            }
         }
 
         // Fetch Market Data for Widget
@@ -160,6 +172,14 @@ class Platform {
                 marketValue.textContent = marketData.price.toLocaleString();
                 const sign = marketData.change >= 0 ? '+' : '';
                 marketSub.innerHTML = `S&P 500 <span style="color: ${marketData.change >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">(${sign}${marketData.change_percent}%)</span>`;
+
+                // Trigger animation update based on market
+                if (window.nexusAnimation) {
+                    window.nexusAnimation.onEvent('market_update', {
+                        volatility: Math.abs(marketData.change_percent),
+                        isPositive: marketData.change >= 0
+                    });
+                }
             } else if (marketValue) {
                 marketValue.textContent = "Unavailable";
             }

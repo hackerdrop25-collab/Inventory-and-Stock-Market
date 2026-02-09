@@ -5,16 +5,39 @@
 {% block content %}
 <div
     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 20px; flex-wrap: wrap;">
-    <h1>Product</h1>
-    <div style="display: flex; gap: 15px; flex-grow: 1; justify-content: flex-end; align-items: center;">
-        <div class="glass-panel"
-            style="padding: 5px 15px; display: flex; align-items: center; gap: 10px; flex-grow: 0; max-width: 300px;">
-            <i class="fas fa-search" style="color: var(--text-secondary);"></i>
-            <input type="text" class="table-search" data-table="productTable" placeholder="Search products..."
-                style="background: transparent; border: none; color: white; outline: none; padding: 5px; width: 100%;">
+    <h1>Products</h1>
+    <button onclick="openModal('addModal')" class="btn btn-primary"><i class="fas fa-plus"></i> Add Product</button>
+</div>
+
+<!-- Search and Filter Section -->
+<div class="glass-panel" style="padding: 20px; margin-bottom: 2rem;">
+    <h3 style="margin-bottom: 1rem;">Search & Filter</h3>
+    <form method="GET" style="display: grid; gap: 15px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label">Search by Name, Category, or Supplier</label>
+                <input type="text" name="search" value="{{ search_query }}" class="form-control" 
+                    placeholder="Type to search...">
+            </div>
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label">Filter by Category</label>
+                <select name="category" class="form-control">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if cat == category_filter %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">
+                    <i class="fas fa-search"></i> Search
+                </button>
+                <a href="{{ url_for('products') }}" class="btn" style="background: rgba(255,255,255,0.1);">
+                    <i class="fas fa-redo"></i> Clear
+                </a>
+            </div>
         </div>
-        <button onclick="openModal('addModal')" class="btn btn-primary"><i class="fas fa-plus"></i> Add Product</button>
-    </div>
+    </form>
 </div>
 
 <div class="glass-panel" style="padding: 20px;">
@@ -34,9 +57,38 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="7" style="text-align: center;">Loading products...</td>
+                {% set counter = namespace(value=1) %}
+                {% for product in products %}
+                <tr {% if product.quantity <= 5 %}class="low-stock-row"{% endif %}>
+                    <td>{{ counter.value }}</td>
+                    <td><strong>{{ product.name }}</strong></td>
+                    <td>{{ product.category }}</td>
+                    <td>${{ "%.2f"|format(product.price) }}</td>
+                    <td>
+                        <span {% if product.quantity <= 5 %}class="low-stock-text"{% endif %}>
+                            {{ product.quantity }} {% if product.quantity <= 5 %}<i class="fas fa-exclamation-triangle"></i>{% endif %}
+                        </span>
+                    </td>
+                    <td>{{ product.supplier }}</td>
+                    {% if current_role == 'Admin' %}
+                    <td>
+                        <button onclick="editProduct('{{ product._id }}')" class="btn btn-small" style="padding: 5px 10px; background: rgba(66, 133, 244, 0.2);">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <a href="{{ url_for('delete_product', id=product._id) }}" class="btn btn-small" style="padding: 5px 10px; background: rgba(239, 68, 68, 0.2);" onclick="return confirm('Are you sure?');">
+                            <i class="fas fa-trash"></i> Delete
+                        </a>
+                    </td>
+                    {% endif %}
                 </tr>
+                {% set counter.value = counter.value + 1 %}
+                {% else %}
+                <tr>
+                    <td colspan="{% if current_role == 'Admin' %}7{% else %}6{% endif %}" style="text-align: center; padding: 20px;">
+                        No products found. <a href="{{ url_for('products') }}" style="color: var(--primary-color);">Clear filters</a>
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     </div>
@@ -46,32 +98,27 @@
 <div id="addModal" class="modal">
     <div class="glass-panel modal-content" style="padding: 30px;">
         <h2 style="margin-bottom: 20px;">Add New Product</h2>
-        <form action="{{ url_for('products') }}" method="POST">
+        <form action="{{ url_for('products') }}" method="POST" id="addProductForm">
             <div class="form-group">
-                <label class="form-label">Product Name</label>
-                <input type="text" name="name" class="form-control" required>
+                <label class="form-label">Product Name <span style="color: var(--danger-color);">*</span></label>
+                <input type="text" name="name" class="form-control" placeholder="Enter product name" required>
+                <small style="color: var(--text-secondary);">Minimum 2 characters</small>
             </div>
             <div class="form-group">
-                <label class="form-label">Category</label>
-                <input type="text" name="category" class="form-control" required>
+                <label class="form-label">Category <span style="color: var(--danger-color);">*</span></label>
+                <input type="text" name="category" class="form-control" placeholder="e.g., Electronics, Furniture" required>
             </div>
             <div class="form-group">
-                <label class="form-label">Price</label>
-                <input type="number" step="0.01" name="price" class="form-control" required>
+                <label class="form-label">Price <span style="color: var(--danger-color);">*</span></label>
+                <input type="number" step="0.01" name="price" class="form-control" placeholder="0.00" required>
             </div>
             <div class="form-group">
-                <label class="form-label">Quantity</label>
-                <input type="number" name="quantity" class="form-control" required>
+                <label class="form-label">Quantity <span style="color: var(--danger-color);">*</span></label>
+                <input type="number" name="quantity" class="form-control" placeholder="0" required>
             </div>
             <div class="form-group">
-                <label class="form-label">Supplier</label>
-                <select name="supplier" class="form-control" id="addSupplierSelect">
-                    <option value="General">General</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Serial Number</label>
-                <input type="text" name="serial_number" class="form-control" placeholder="e.g., SN001">
+                <label class="form-label">Supplier <span style="color: var(--danger-color);">*</span></label>
+                <input type="text" name="supplier" class="form-control" placeholder="Enter supplier name" required>
             </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" onclick="closeModal('addModal')" class="btn"
@@ -107,10 +154,6 @@
                 <label class="form-label">Supplier</label>
                 <input type="text" id="editSupplier" name="supplier" class="form-control" required>
             </div>
-            <div class="form-group">
-                <label class="form-label">Serial Number</label>
-                <input type="text" id="editSerialNumber" name="serial_number" class="form-control">
-            </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" onclick="closeModal('editModal')" class="btn"
                     style="background: rgba(255,255,255,0.1);">Cancel</button>
@@ -120,6 +163,51 @@
     </div>
 </div>
 {% endblock %}
+
+{% block styles %}
+<style>
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-label {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.form-control {
+    padding: 12px 15px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-primary);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: rgba(66, 133, 244, 0.1);
+}
+
+.btn-small {
+    padding: 6px 12px !important;
+    font-size: 0.85rem;
+}
+
+.low-stock-row {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.low-stock-text {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+</style>
+
 
 {% block scripts %}
 <script>
@@ -131,6 +219,10 @@
         document.getElementById(id).classList.remove('active');
     }
 
-    // Custom logic to populate addSupplierSelect if needed (otherwise handled by platform.js or rendered partially)
+    function editProduct(id) {
+        // This would typically fetch product data via API and populate the form
+        // For now, we'll just navigate to an edit endpoint
+        alert('Product ID: ' + id);
+    }
 </script>
 {% endblock %}

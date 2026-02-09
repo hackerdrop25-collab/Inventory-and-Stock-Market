@@ -5,8 +5,18 @@ class NexusAnimation {
         this.particles = [];
         this.mouse = { x: -100, y: -100, radius: 250 };
         this.theme = 'light';
-        this.hue = 220; // Base hue for blue
+        this.hue = 220;
         this.time = 0;
+
+        // Structured Flow Config
+        this.config = {
+            particleCount: 80,
+            lineDistance: 180,
+            baseSpeed: 0.4,
+            pulseIntensity: 0,
+            glowIntensity: 0,
+            state: 'idle' // idle, processing, alert
+        };
 
         this.init();
     }
@@ -39,11 +49,67 @@ class NexusAnimation {
         this.updateTheme();
     }
 
+    // --- Structured Flow Functions ---
+
+    /**
+     * Triggers a visual pulse event (e.g., on sale or update)
+     */
+    triggerPulse(intensity = 15) {
+        this.config.pulseIntensity = intensity;
+        // Temporary speed boost
+        const originalSpeed = this.config.baseSpeed;
+        this.config.baseSpeed *= 3;
+        setTimeout(() => {
+            this.config.baseSpeed = originalSpeed;
+        }, 500);
+    }
+
+    /**
+     * Sets the global flow state
+     * @param {string} state - 'idle', 'processing', 'alert'
+     */
+    setFlowState(state) {
+        this.config.state = state;
+        switch (state) {
+            case 'processing':
+                this.config.baseSpeed = 0.8;
+                this.config.glowIntensity = 0.5;
+                break;
+            case 'alert':
+                this.config.baseSpeed = 1.2;
+                this.config.glowIntensity = 1.0;
+                break;
+            default: // idle
+                this.config.baseSpeed = 0.4;
+                this.config.glowIntensity = 0;
+        }
+    }
+
+    /**
+     * Responds to real-time events from the platform
+     */
+    onEvent(eventType, data = {}) {
+        console.log(`[NexusAnimation] Event: ${eventType}`, data);
+        switch (eventType) {
+            case 'sale':
+                this.triggerPulse(20);
+                break;
+            case 'market_update':
+                this.triggerPulse(10);
+                if (data.volatility > 2) this.setFlowState('processing');
+                else this.setFlowState('idle');
+                break;
+            case 'low_stock':
+                this.setFlowState('alert');
+                setTimeout(() => this.setFlowState('idle'), 5000);
+                break;
+        }
+    }
+
     updateTheme() {
         const newTheme = document.documentElement.getAttribute('data-theme') || 'light';
         if (this.theme !== newTheme) {
             this.theme = newTheme;
-            // Transition effect: burst particles or just change colors
             this.createParticles();
         }
     }
@@ -82,17 +148,17 @@ class NexusAnimation {
 
     createParticles() {
         this.particles = [];
-        const count = Math.min(80, Math.floor((this.width * this.height) / 15000));
+        const count = Math.min(this.config.particleCount, Math.floor((this.width * this.height) / 15000));
         const colors = this.getThemeColors();
 
         for (let i = 0; i < count; i++) {
             this.particles.push({
                 x: Math.random() * this.width,
                 y: Math.random() * this.height,
-                z: Math.random() * 3 + 1, // Reduced depth range for better visibility
-                vx: (Math.random() - 0.5) * 0.4,
-                vy: (Math.random() - 0.5) * 0.4,
-                size: Math.random() * 4 + 2, // Increased size
+                z: Math.random() * 3 + 1,
+                vx: (Math.random() - 0.5) * this.config.baseSpeed,
+                vy: (Math.random() - 0.5) * this.config.baseSpeed,
+                size: Math.random() * 4 + 2,
                 color: Math.random() > 0.5 ? colors.primary : colors.secondary,
                 pulse: Math.random() * Math.PI * 2,
                 pulseSpeed: 0.02 + Math.random() * 0.03
@@ -100,29 +166,18 @@ class NexusAnimation {
         }
     }
 
-    drawHexagon(x, y, size, color, opacity) {
-        this.ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i;
-            const px = x + size * Math.cos(angle);
-            const py = y + size * Math.sin(angle);
-            if (i === 0) this.ctx.moveTo(px, py);
-            else this.ctx.lineTo(px, py);
-        }
-        this.ctx.closePath();
-        this.ctx.fillStyle = `rgba(${color}, ${opacity})`;
-        this.ctx.fill();
-    }
-
     animate() {
         this.ctx.clearRect(0, 0, this.width, this.height);
         this.time += 0.01;
         const colors = this.getThemeColors();
 
+        // Decay pulse and glow
+        if (this.config.pulseIntensity > 0) this.config.pulseIntensity *= 0.95;
+
         this.particles.forEach((p, i) => {
-            // Movement with depth-based speed
-            p.x += p.vx * (1 / p.z);
-            p.y += p.vy * (1 / p.z);
+            // Movement with depth-based speed and global baseSpeed
+            p.x += p.vx * (1 / p.z) * (this.config.baseSpeed / 0.4);
+            p.y += p.vy * (1 / p.z) * (this.config.baseSpeed / 0.4);
 
             // Screen wrap
             if (p.x < -50) p.x = this.width + 50;
@@ -135,23 +190,35 @@ class NexusAnimation {
             const dy = this.mouse.y - p.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            let extraSize = 0;
+            let extraSize = this.config.pulseIntensity * (1 / p.z);
             if (dist < this.mouse.radius) {
                 const force = (1 - dist / this.mouse.radius);
                 p.x -= dx * force * 0.03;
                 p.y -= dy * force * 0.03;
-                extraSize = force * 8;
+                extraSize += force * 8;
             }
 
             // Pulse effect
             p.pulse += p.pulseSpeed;
             const pulseFactor = Math.sin(p.pulse) * 0.4 + 0.6;
-            const opac = (0.4 + (1 / p.z) * 0.5) * pulseFactor; // Increased base opacity
+            let opac = (0.4 + (1 / p.z) * 0.5) * pulseFactor;
+
+            // Add state-based glow
+            if (this.config.glowIntensity > 0) {
+                opac = Math.min(1, opac + this.config.glowIntensity * 0.3);
+            }
 
             // Draw particle (node)
             this.ctx.beginPath();
             this.ctx.arc(p.x, p.y, (p.size + extraSize) * (2 / p.z), 0, Math.PI * 2);
-            this.ctx.fillStyle = `rgba(${p.color}, ${opac})`;
+
+            // Highlight if in alert state
+            let drawColor = p.color;
+            if (this.config.state === 'alert' && Math.random() > 0.8) {
+                drawColor = '239, 68, 68'; // Red 500
+            }
+
+            this.ctx.fillStyle = `rgba(${drawColor}, ${opac})`;
             this.ctx.fill();
 
             // Connections
@@ -161,13 +228,15 @@ class NexusAnimation {
                 const ldy = p.y - p2.y;
                 const ldist = Math.sqrt(ldx * ldx + ldy * ldy);
 
-                if (ldist < 180) { // Increased distance for more lines
-                    const lineOpac = (1 - ldist / 180) * 0.3 * (1 / p.z); // Doubled line opacity
+                if (ldist < this.config.lineDistance) {
+                    let lineOpac = (1 - ldist / this.config.lineDistance) * 0.3 * (1 / p.z);
+                    if (this.config.pulseIntensity > 5) lineOpac *= 2;
+
                     this.ctx.beginPath();
                     this.ctx.moveTo(p.x, p.y);
                     this.ctx.lineTo(p2.x, p2.y);
                     this.ctx.strokeStyle = `rgba(${colors.primary}, ${lineOpac})`;
-                    this.ctx.lineWidth = 0.8;
+                    this.ctx.lineWidth = 0.8 + (this.config.pulseIntensity / 20);
                     this.ctx.stroke();
                 }
             }

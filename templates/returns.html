@@ -3,77 +3,102 @@
 {% block title %}Supplier Returns{% endblock %}
 
 {% block content %}
-<h1 style="margin-bottom: 2rem;">Supplier Returns</h1>
+<h1 style="margin-bottom: 2rem;">Supplier Returns Management</h1>
 
 <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
     <!-- New Return Form -->
     <div class="glass-panel" style="padding: 20px; height: fit-content;">
-        <h2 style="margin-bottom: 20px;">Process Return</h2>
-        <form method="POST">
+        <h2 style="margin-bottom: 20px;"><i class="fas fa-undo"></i> Process Return</h2>
+        <form method="POST" id="returnForm">
             <div class="form-group">
-                <label class="form-label">Select Product</label>
+                <label class="form-label">Select Product <span style="color: var(--danger-color);">*</span></label>
                 <select name="product_id" id="productSelect" class="form-control" required>
                     <option value="" disabled selected>Choose a product...</option>
                     {% for product in products %}
                     <option value="{{ product._id }}">
-                        {{ product.name }} (Supplier: {{ product.supplier }}, Stock: {{ product.quantity }})
+                        {{ product.name }} ({{ product.supplier }}, Stock: {{ product.quantity }})
                     </option>
                     {% endfor %}
                 </select>
             </div>
             <div class="form-group">
-                <label class="form-label">Quantity to Return</label>
-                <input type="number" name="quantity" class="form-control" min="1" required>
+                <label class="form-label">Quantity to Return <span style="color: var(--danger-color);">*</span></label>
+                <input type="number" name="quantity" class="form-control" min="1" placeholder="0" required>
+                <small style="color: var(--text-secondary);">Positive integer only</small>
             </div>
             <div class="form-group">
-                <label class="form-label">Reason for Return</label>
-                <textarea name="reason" class="form-control" rows="3"
-                    placeholder="Defective, Overstock, Wrong item, etc." required></textarea>
+                <label class="form-label">Reason for Return <span style="color: var(--danger-color);">*</span></label>
+                <textarea name="reason" class="form-control" rows="4"
+                    placeholder="Defective, Overstock, Wrong item, Damaged, etc." required></textarea>
+                <small style="color: var(--text-secondary);">Minimum 3 characters</small>
             </div>
 
             <button type="submit" class="btn"
-                style="width: 100%; justify-content: center; background: var(--warning-color); color: white;">
-                Process Return
+                style="width: 100%; justify-content: center; background: var(--warning-color); color: white; padding: 12px;">
+                <i class="fas fa-check-circle"></i> Process Return
             </button>
         </form>
     </div>
 
     <!-- Recent Returns -->
     <div class="glass-panel" style="padding: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2>Recent Returns</h2>
-            <div class="glass-panel"
-                style="padding: 5px 12px; display: flex; align-items: center; gap: 8px; max-width: 200px;">
-                <i class="fas fa-search" style="color: var(--text-secondary); font-size: 0.8rem;"></i>
-                <input type="text" class="table-search" data-table="returnsTable" placeholder="Search..."
-                    style="background: transparent; border: none; color: white; outline: none; padding: 2px; width: 100%; font-size: 0.9rem;">
-            </div>
+        <!-- Search Section -->
+        <div style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 1rem;">Search Returns</h3>
+            <form method="GET" style="display: grid; gap: 10px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group" style="margin: 0;">
+                        <input type="text" name="search" value="{{ search_query }}" class="form-control" 
+                            placeholder="Search by product or reason...">
+                    </div>
+                    <input type="date" name="date_from" value="{{ date_from }}" class="form-control">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">
+                        <i class="fas fa-search"></i> Filter
+                    </button>
+                    <a href="{{ url_for('returns') }}" class="btn" style="flex: 1; background: rgba(255,255,255,0.1);">
+                        <i class="fas fa-redo"></i> Clear
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2>Return History</h2>
+            <span style="background: var(--warning-color); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">
+                {{ returns|length }} Returns
+            </span>
         </div>
         <div class="table-container">
             <table id="returnsTable">
                 <thead>
                     <tr>
+                        <th>S.No</th>
                         <th>Date</th>
                         <th>Product</th>
                         <th>Supplier</th>
                         <th>Qty</th>
                         <th>Reason</th>
-                        <th>By</th>
+                        <th>Processed By</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for return in returns %}
-                    <tr>
-                        <td>{{ return.date.strftime('%Y-%m-%d') }}</td>
-                        <td>{{ return.product_name }}</td>
-                        <td>{{ return.supplier_name }}</td>
-                        <td>{{ return.quantity }}</td>
-                        <td>{{ return.reason }}</td>
-                        <td>{{ return.processed_by }}</td>
+                    {% set counter = namespace(value=1) %}
+                    {% for ret in returns %}
+                    <tr style="background: rgba(251, 191, 36, 0.05);">
+                        <td>{{ counter.value }}</td>
+                        <td>{{ ret.date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td><strong>{{ ret.product_name }}</strong></td>
+                        <td>{{ ret.supplier_name }}</td>
+                        <td><span style="background: var(--warning-color); color: black; padding: 3px 8px; border-radius: 4px;">{{ ret.quantity }}</span></td>
+                        <td>{{ ret.reason }}</td>
+                        <td>{{ ret.processed_by }}</td>
                     </tr>
+                    {% set counter.value = counter.value + 1 %}
                     {% else %}
                     <tr>
-                        <td colspan="6" style="text-align: center;">No returns history found</td>
+                        <td colspan="7" style="text-align: center; padding: 20px;">No returns history found</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -81,4 +106,57 @@
         </div>
     </div>
 </div>
+
+<style>
+.form-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 15px;
+}
+
+.form-label {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.form-control {
+    padding: 12px 15px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-primary);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: rgba(66, 133, 244, 0.1);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table th {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+table td {
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+table tr:hover {
+    background: rgba(255, 255, 255, 0.02) !important;
+}
+</style>
 {% endblock %}

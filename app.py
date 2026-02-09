@@ -1,18 +1,26 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
+from dotenv import load_dotenv
+import csv
+from io import StringIO
 from market_utils import get_market_summary
+from validators import (validate_email_address, validate_password, validate_product_input, 
+                        validate_sale_input, validate_supplier_input, validate_return_input)
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = "super_secret_inventory_key"
+app.secret_key = os.getenv('SECRET_KEY', 'super_secret_inventory_key_change_this')
 
 # MongoDB Connection
-# Assuming local instance by default. User can change URI if needed.
-MONGO_URI = "mongodb://localhost:27017/"
-DB_NAME = "inventory_management_system"
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+DB_NAME = os.getenv('DB_NAME', 'inventory_management_system')
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@example.com')
 
 try:
     # Set timeout to 2 seconds to fail fast if no DB
@@ -72,8 +80,18 @@ def home():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        # Validation
+        if not username or not password:
+            flash('Email and password are required', 'error')
+            return render_template('login.html')
+        
+        is_valid_email, email_msg = validate_email_address(username)
+        if not is_valid_email:
+            flash('Invalid email format', 'error')
+            return render_template('login.html')
         
         user = users_collection.find_one({'username': username})
         
@@ -87,15 +105,7 @@ def login():
         
         if user and check_password_hash(user['password'], password):
             session['user'] = username
-            
-            # Auto-upgrade personal ID to Admin for security
-            if username == 'hackerdrop25@gmail.com':
-                role = 'Admin'
-                if user.get('role') != 'Admin':
-                    users_collection.update_one({'username': username}, {'$set': {'role': 'Admin'}})
-            else:
-                role = user.get('role', 'Student')
-                
+            role = user.get('role', 'User')
             session['role'] = role
             
             log_entry['status'] = 'Success'
@@ -105,9 +115,10 @@ def login():
         else:
             log_entry['status'] = 'Failed'
             firewall_logs.insert_one(log_entry)
-            flash('Incorrect Email Id or Password', 'error')
+            flash('Incorrect Email or Password', 'error')
             
     return render_template('login.html')
+
 
 @app.route('/security-logs')
 @login_required
@@ -119,29 +130,45 @@ def security_logs():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        role = request.form.get('role', 'Student') # Default to Student if not specified
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        role = request.form.get('role', 'User')
         
-        # Security: Only personal ID can register as Admin
-        if role == 'Admin' and username != 'hackerdrop25@gmail.com':
-            role = 'Student'
-            flash('Security Restriction: Only personal ID can be Admin. Role set to Student.', 'warning')
+        # Validate email
+        is_valid_email, email_msg = validate_email_address(username)
+        if not is_valid_email:
+            flash(f'Invalid email: {email_msg}', 'error')
+            return render_template('register.html')
         
+        # Validate password
+        is_valid_password, password_errors = validate_password(password)
+        if not is_valid_password:
+            for error in password_errors:
+                flash(error, 'error')
+            return render_template('register.html')
+        
+        # Check if user exists
         if users_collection.find_one({'username': username}):
-            flash('Incorrect Email Id or Password', 'error')
-        else:
-            hashed_password = generate_password_hash(password)
-            users_collection.insert_one({
-                'username': username, 
-                'password': hashed_password,
-                'role': role,
-                'created_at': datetime.now()
-            })
-            flash('Registration successful! Please login.', 'success')
-            return redirect(url_for('login'))
+            flash('Email already registered. Please login.', 'error')
+            return render_template('register.html')
+        
+        # Prevent non-admin registrations as Admin
+        if role == 'Admin' and username != ADMIN_EMAIL:
+            role = 'User'
+            flash('Only authorized email can register as Admin. Role set to User.', 'warning')
+        
+        hashed_password = generate_password_hash(password)
+        users_collection.insert_one({
+            'username': username, 
+            'password': hashed_password,
+            'role': role,
+            'created_at': datetime.now()
+        })
+        flash('Registration successful! Please login.', 'success')
+        return redirect(url_for('login'))
             
     return render_template('register.html')
+
 
 @app.route('/logout')
 def logout():
@@ -198,30 +225,55 @@ def dashboard():
 def products():
     if request.method == 'POST':
         # Add Product
-        name = request.form['name']
-        category = request.form['category']
-        price = float(request.form['price'])
-        quantity = int(request.form['quantity'])
-        supplier = request.form['supplier']
+        name = request.form.get('name', '').strip()
+        category = request.form.get('category', '').strip()
+        price = request.form.get('price', '')
+        quantity = request.form.get('quantity', '')
+        supplier = request.form.get('supplier', '').strip()
+        
+        # Validate input
+        is_valid, errors = validate_product_input(name, category, price, quantity, supplier)
+        if not is_valid:
+            for error in errors:
+                flash(error, 'error')
+            return render_template('products.html', products=products_collection.find(), 
+                                   suppliers=suppliers_collection.find())
         
         products_collection.insert_one({
             'name': name,
             'category': category,
-            'price': price,
-            'quantity': quantity,
+            'price': float(price),
+            'quantity': int(quantity),
             'supplier': supplier,
-            'added_by': session['user'],  # Link product to user
+            'added_by': session['user'],
             'added_at': datetime.now()
         })
         flash('Product added successfully', 'success')
         return redirect(url_for('products'))
         
-    # Show all products for both Admin and Student
+    # Show all products
+    search_query = request.args.get('search', '').strip()
+    category_filter = request.args.get('category', '').strip()
+    
     filter_query = {}
-        
+    if search_query:
+        filter_query['$or'] = [
+            {'name': {'$regex': search_query, '$options': 'i'}},
+            {'category': {'$regex': search_query, '$options': 'i'}},
+            {'supplier': {'$regex': search_query, '$options': 'i'}}
+        ]
+    
+    if category_filter:
+        filter_query['category'] = category_filter
+    
     products_list = products_collection.find(filter_query)
     suppliers_list = suppliers_collection.find()
-    return render_template('products.html', products=products_list, suppliers=suppliers_list)
+    categories = [p['category'] for p in products_collection.find({}, {'category': 1})]
+    categories = list(set(categories))  # Remove duplicates
+    
+    return render_template('products.html', products=products_list, suppliers=suppliers_list, 
+                          categories=categories, search_query=search_query, category_filter=category_filter)
+
 
 @app.route('/products/delete/<id>')
 @login_required
@@ -241,41 +293,56 @@ def delete_product(id):
 @login_required
 @admin_required
 def update_product(id):
-    name = request.form['name']
-    category = request.form['category']
-    price = float(request.form['price'])
-    quantity = int(request.form['quantity'])
-    supplier = request.form['supplier']
+    name = request.form.get('name', '').strip()
+    category = request.form.get('category', '').strip()
+    price = request.form.get('price', '')
+    quantity = request.form.get('quantity', '')
+    supplier = request.form.get('supplier', '').strip()
     
-    # Admin required decorator handles permission
-    filter_query = {'_id': ObjectId(id)}
-        
-    result = products_collection.update_one(filter_query, {'$set': {
+    # Validate input
+    is_valid, errors = validate_product_input(name, category, price, quantity, supplier)
+    if not is_valid:
+        for error in errors:
+            flash(error, 'error')
+        return redirect(url_for('products'))
+    
+    result = products_collection.update_one({'_id': ObjectId(id)}, {'$set': {
         'name': name,
         'category': category,
-        'price': price,
-        'quantity': quantity,
+        'price': float(price),
+        'quantity': int(quantity),
         'supplier': supplier
     }})
     
     if result.matched_count > 0:
-        flash('Product updated', 'success')
+        flash('Product updated successfully', 'success')
     else:
-        flash('Permission denied or product not found', 'error')
+        flash('Product not found', 'error')
         
     return redirect(url_for('products'))
+
 
 @app.route('/sales', methods=['GET', 'POST'])
 @login_required
 def sales():
     if request.method == 'POST':
-        product_id = request.form['product_id']
-        quantity = int(request.form['quantity'])
-        customer_name = request.form.get('customer_name', 'Walk-in Customer')
+        product_id = request.form.get('product_id', '').strip()
+        quantity = request.form.get('quantity', '')
+        customer_name = request.form.get('customer_name', 'Walk-in Customer').strip()
         
-        prod_filter = {'_id': ObjectId(product_id)}
-            
-        product = products_collection.find_one(prod_filter)
+        # Validate input
+        is_valid, errors = validate_sale_input(quantity, customer_name)
+        if not is_valid:
+            for error in errors:
+                flash(error, 'error')
+            return redirect(url_for('sales'))
+        
+        if not product_id:
+            flash('Please select a product', 'error')
+            return redirect(url_for('sales'))
+        
+        quantity = int(quantity)
+        product = products_collection.find_one({'_id': ObjectId(product_id)})
         
         if product:
             if product['quantity'] >= quantity:
@@ -298,59 +365,111 @@ def sales():
                 })
                 flash(f'Sale successful! Total: ${total_price:.2f}', 'success')
             else:
-                flash('Insufficient stock!', 'error')
+                flash(f'Insufficient stock! Available: {product["quantity"]}', 'error')
         else:
-            flash('Product not found or permission denied!', 'error')
+            flash('Product not found!', 'error')
         return redirect(url_for('sales'))
 
-    # All users can see complete product list for sales dropdown
-    prod_filter = {}
-    products_list = products_collection.find(prod_filter)
+    # Advanced search for sales
+    search_query = request.args.get('search', '').strip()
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
     
-    # Filter transactions based on role
+    prod_filter = {}
+    products_list = products_collection.find(prod_filter).sort('name', 1)
+    
     sale_filter = {}
-    sale_filter = {}
-        
+    if search_query:
+        sale_filter['$or'] = [
+            {'product_name': {'$regex': search_query, '$options': 'i'}},
+            {'customer_name': {'$regex': search_query, '$options': 'i'}}
+        ]
+    
+    if date_from:
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
+            sale_filter.setdefault('date', {})['$gte'] = date_from_obj
+        except:
+            pass
+    
+    if date_to:
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
+            date_to_obj = date_to_obj.replace(hour=23, minute=59, second=59)
+            sale_filter.setdefault('date', {})['$lte'] = date_to_obj
+        except:
+            pass
+    
     recent_transactions = sales_collection.find(sale_filter).sort('date', -1).limit(10)
-    return render_template('sales.html', products=products_list, transactions=recent_transactions)
+    return render_template('sales.html', products=products_list, transactions=recent_transactions,
+                          search_query=search_query, date_from=date_from, date_to=date_to)
+
 
 @app.route('/suppliers', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def suppliers():
     if request.method == 'POST':
-        name = request.form['name']
-        contact = request.form['contact']
-        email = request.form['email']
-        address = request.form['address']
+        name = request.form.get('name', '').strip()
+        contact = request.form.get('contact', '').strip()
+        email = request.form.get('email', '').strip()
+        address = request.form.get('address', '').strip()
+        
+        # Validate input
+        is_valid, errors = validate_supplier_input(name, contact, email, address)
+        if not is_valid:
+            for error in errors:
+                flash(error, 'error')
+            return render_template('suppliers.html', suppliers=suppliers_collection.find())
         
         suppliers_collection.insert_one({
             'name': name,
             'contact': contact,
             'email': email,
-            'address': address
+            'address': address,
+            'added_at': datetime.now()
         })
-        flash('Supplier added', 'success')
+        flash('Supplier added successfully', 'success')
         return redirect(url_for('suppliers'))
 
-    suppliers_list = suppliers_collection.find()
-    return render_template('suppliers.html', suppliers=suppliers_list)
+    search_query = request.args.get('search', '').strip()
+    filter_query = {}
+    if search_query:
+        filter_query['$or'] = [
+            {'name': {'$regex': search_query, '$options': 'i'}},
+            {'contact': {'$regex': search_query, '$options': 'i'}},
+            {'email': {'$regex': search_query, '$options': 'i'}}
+        ]
+    
+    suppliers_list = suppliers_collection.find(filter_query)
+    return render_template('suppliers.html', suppliers=suppliers_list, search_query=search_query)
+
 
 @app.route('/returns', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def returns():
     if request.method == 'POST':
-        product_id = request.form['product_id']
-        quantity = int(request.form['quantity'])
-        reason = request.form['reason']
+        product_id = request.form.get('product_id', '').strip()
+        quantity = request.form.get('quantity', '')
+        reason = request.form.get('reason', '').strip()
         
-        prod_filter = {'_id': ObjectId(product_id)}
-            
-        product = products_collection.find_one(prod_filter)
+        # Validate input
+        is_valid, errors = validate_return_input(quantity, reason)
+        if not is_valid:
+            for error in errors:
+                flash(error, 'error')
+            products_list = products_collection.find().sort('name', 1)
+            return render_template('returns.html', products=products_list, returns=returns_collection.find())
+        
+        if not product_id:
+            flash('Please select a product', 'error')
+            return redirect(url_for('returns'))
+        
+        quantity = int(quantity)
+        product = products_collection.find_one({'_id': ObjectId(product_id)})
         
         if product:
-            # Record the return without removing from main stock
             returns_collection.insert_one({
                 'product_name': product['name'],
                 'product_id': ObjectId(product_id),
@@ -366,14 +485,31 @@ def returns():
         return redirect(url_for('returns'))
 
     # Get all products for return selection
-    prod_filter = {}
-    products_list = products_collection.find(prod_filter)
+    search_query = request.args.get('search', '').strip()
+    date_from = request.args.get('date_from', '')
     
-    # Get returns list
+    prod_filter = {}
+    products_list = products_collection.find(prod_filter).sort('name', 1)
+    
     return_filter = {}
+    if search_query:
+        return_filter['$or'] = [
+            {'product_name': {'$regex': search_query, '$options': 'i'}},
+            {'reason': {'$regex': search_query, '$options': 'i'}}
+        ]
+    
+    if date_from:
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
+            return_filter['date'] = {'$gte': date_from_obj}
+        except:
+            pass
+    
     recent_returns = returns_collection.find(return_filter).sort('date', -1)
     
-    return render_template('returns.html', products=products_list, returns=recent_returns)
+    return render_template('returns.html', products=products_list, returns=recent_returns,
+                          search_query=search_query, date_from=date_from)
+
 
 @app.route('/reports')
 @login_required
@@ -424,6 +560,202 @@ def reports():
                            returns=returns_list,
                            chart_labels=chart_labels,
                            chart_data=chart_data)
+
+# --- CSV Export Routes ---
+
+@app.route('/export/products/csv')
+@login_required
+def export_products_csv():
+    """Export products to CSV"""
+    try:
+        products_list = list(products_collection.find())
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Name', 'Category', 'Price', 'Quantity', 'Supplier', 'Added By', 'Added At'])
+        
+        for product in products_list:
+            writer.writerow([
+                product.get('name', ''),
+                product.get('category', ''),
+                f"${product.get('price', 0):.2f}",
+                product.get('quantity', 0),
+                product.get('supplier', ''),
+                product.get('added_by', ''),
+                product.get('added_at', '').strftime('%Y-%m-%d %H:%M') if product.get('added_at') else ''
+            ])
+        
+        output.seek(0)
+        return send_file(
+            output,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'products_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        )
+    except Exception as e:
+        flash(f'Error exporting products: {str(e)}', 'error')
+        return redirect(url_for('reports'))
+
+@app.route('/export/sales/csv')
+@login_required
+def export_sales_csv():
+    """Export sales to CSV"""
+    try:
+        sales_list = list(sales_collection.find().sort('date', -1))
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Product', 'Quantity', 'Price/Unit', 'Total Price', 'Customer', 'Date', 'Sold By'])
+        
+        for sale in sales_list:
+            writer.writerow([
+                sale.get('product_name', ''),
+                sale.get('quantity', 0),
+                f"${sale.get('price_per_unit', 0):.2f}",
+                f"${sale.get('total_price', 0):.2f}",
+                sale.get('customer_name', ''),
+                sale.get('date', '').strftime('%Y-%m-%d %H:%M') if sale.get('date') else '',
+                sale.get('sold_by', '')
+            ])
+        
+        output.seek(0)
+        return send_file(
+            output,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'sales_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        )
+    except Exception as e:
+        flash(f'Error exporting sales: {str(e)}', 'error')
+        return redirect(url_for('reports'))
+
+@app.route('/export/returns/csv')
+@login_required
+def export_returns_csv():
+    """Export returns to CSV"""
+    try:
+        returns_list = list(returns_collection.find().sort('date', -1))
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Product', 'Quantity', 'Reason', 'Supplier', 'Date', 'Processed By'])
+        
+        for ret in returns_list:
+            writer.writerow([
+                ret.get('product_name', ''),
+                ret.get('quantity', 0),
+                ret.get('reason', ''),
+                ret.get('supplier_name', ''),
+                ret.get('date', '').strftime('%Y-%m-%d %H:%M') if ret.get('date') else '',
+                ret.get('processed_by', '')
+            ])
+        
+        output.seek(0)
+        return send_file(
+            output,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'returns_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        )
+    except Exception as e:
+        flash(f'Error exporting returns: {str(e)}', 'error')
+        return redirect(url_for('reports'))
+
+@app.route('/export/low-stock/csv')
+@login_required
+def export_low_stock_csv():
+    """Export low stock items to CSV"""
+    try:
+        low_stock = list(products_collection.find({'quantity': {'$lte': 5}}))
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Name', 'Category', 'Current Stock', 'Price', 'Supplier', 'Alert Level'])
+        
+        for product in low_stock:
+            alert_level = 'Critical' if product.get('quantity', 0) == 0 else 'Low'
+            writer.writerow([
+                product.get('name', ''),
+                product.get('category', ''),
+                product.get('quantity', 0),
+                f"${product.get('price', 0):.2f}",
+                product.get('supplier', ''),
+                alert_level
+            ])
+        
+        output.seek(0)
+        return send_file(
+            output,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'low_stock_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        )
+    except Exception as e:
+        flash(f'Error exporting low stock: {str(e)}', 'error')
+        return redirect(url_for('reports'))
+
+# --- Analytics API Routes ---
+
+@app.route('/api/analytics/dashboard')
+@login_required
+def api_analytics_dashboard():
+    """Get dashboard analytics data"""
+    try:
+        # Total sales by category
+        category_sales = list(sales_collection.aggregate([
+            {'$lookup': {
+                'from': 'products',
+                'localField': 'product_id',
+                'foreignField': '_id',
+                'as': 'product'
+            }},
+            {'$unwind': '$product'},
+            {'$group': {
+                '_id': '$product.category',
+                'total': {'$sum': '$total_price'},
+                'units': {'$sum': '$quantity'}
+            }},
+            {'$sort': {'total': -1}}
+        ]))
+        
+        # Top 5 products by sales
+        top_products = list(sales_collection.aggregate([
+            {'$group': {
+                '_id': '$product_name',
+                'units_sold': {'$sum': '$quantity'},
+                'revenue': {'$sum': '$total_price'}
+            }},
+            {'$sort': {'revenue': -1}},
+            {'$limit': 5}
+        ]))
+        
+        # Monthly sales trend (last 30 days)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        monthly_trend = list(sales_collection.aggregate([
+            {'$match': {'date': {'$gte': thirty_days_ago}}},
+            {'$group': {
+                '_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$date'}},
+                'total': {'$sum': '$total_price'}
+            }},
+            {'$sort': {'_id': 1}}
+        ]))
+        
+        # Inventory overview
+        inventory_stats = {
+            'total_items': products_collection.count_documents({}),
+            'in_stock': products_collection.count_documents({'quantity': {'$gt': 0}}),
+            'low_stock': products_collection.count_documents({'quantity': {'$lte': 5, '$gt': 0}}),
+            'out_of_stock': products_collection.count_documents({'quantity': 0})
+        }
+        
+        return jsonify({
+            'category_sales': category_sales,
+            'top_products': top_products,
+            'monthly_trend': monthly_trend,
+            'inventory_stats': inventory_stats
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # --- API Routes ---
 

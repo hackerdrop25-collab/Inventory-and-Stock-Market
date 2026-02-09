@@ -7,6 +7,21 @@
 
 <h1 style="margin-bottom: 2rem;">Business Reports</h1>
 
+<div class="export-buttons" style="margin-bottom: 2rem; display: flex; gap: 10px; flex-wrap: wrap;">
+    <a href="{{ url_for('export_products_csv') }}" class="btn btn-primary" title="Export products as CSV">
+        <i class="fas fa-download"></i> Export Products
+    </a>
+    <a href="{{ url_for('export_sales_csv') }}" class="btn btn-primary" title="Export sales as CSV">
+        <i class="fas fa-download"></i> Export Sales
+    </a>
+    <a href="{{ url_for('export_returns_csv') }}" class="btn btn-primary" title="Export returns as CSV">
+        <i class="fas fa-download"></i> Export Returns
+    </a>
+    <a href="{{ url_for('export_low_stock_csv') }}" class="btn btn-danger" title="Export low stock alerts as CSV">
+        <i class="fas fa-download"></i> Export Low Stock
+    </a>
+</div>
+
 <div style="display: grid; gap: 30px;">
 
     <!-- Sales Analytics Chart -->
@@ -18,8 +33,12 @@
 
     <!-- Low Stock Alert -->
     <div class="glass-panel" style="padding: 20px; border: 1px solid var(--danger-color);">
-        <h2 style="margin-bottom: 20px; color: var(--danger-color);"><i class="fas fa-exclamation-circle"></i> Low Stock
-            Alerts</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="color: var(--danger-color);"><i class="fas fa-exclamation-circle"></i> Low Stock Alerts</h2>
+            <span style="background: var(--danger-color); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">
+                {{ low_stock|length }} Items
+            </span>
+        </div>
         <div class="table-container">
             <table id="low-stock-table">
                 <thead>
@@ -28,20 +47,142 @@
                         <th>Category</th>
                         <th>Current Stock</th>
                         <th>Supplier</th>
+                        <th>Alert Level</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td colspan="4" style="text-align: center;">Loading stock alerts...</td>
+                    {% for item in low_stock %}
+                    <tr style="{% if item.quantity == 0 %}background: rgba(239, 68, 68, 0.1);{% endif %}">
+                        <td><strong>{{ item.name }}</strong></td>
+                        <td>{{ item.category }}</td>
+                        <td>{{ item.quantity }} units</td>
+                        <td>{{ item.supplier }}</td>
+                        <td>
+                            {% if item.quantity == 0 %}
+                            <span style="background: var(--danger-color); color: white; padding: 3px 8px; border-radius: 5px; font-size: 0.85rem;">Out of Stock</span>
+                            {% else %}
+                            <span style="background: var(--warning-color); color: black; padding: 3px 8px; border-radius: 5px; font-size: 0.85rem;">Low Stock</span>
+                            {% endif %}
+                        </td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 20px;">✓ All items have sufficient stock</td>
+                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
-    <!-- Other reports can be added similarly -->
+
+    <!-- Sales Report -->
+    <div class="glass-panel" style="padding: 20px;">
+        <h2 style="margin-bottom: 20px;"><i class="fas fa-shopping-cart"></i> Recent Sales</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Customer</th>
+                        <th>Quantity</th>
+                        <th>Total Price</th>
+                        <th>Date</th>
+                        <th>Sold By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales %}
+                    <tr>
+                        <td><strong>{{ sale.product_name }}</strong></td>
+                        <td>{{ sale.customer_name }}</td>
+                        <td>{{ sale.quantity }}</td>
+                        <td>${{ "%.2f"|format(sale.total_price) }}</td>
+                        <td>{{ sale.date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ sale.sold_by }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center;">No sales data available</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Returns Report -->
+    <div class="glass-panel" style="padding: 20px;">
+        <h2 style="margin-bottom: 20px;"><i class="fas fa-undo"></i> Returns Log</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Reason</th>
+                        <th>Supplier</th>
+                        <th>Date</th>
+                        <th>Processed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ret in returns %}
+                    <tr>
+                        <td><strong>{{ ret.product_name }}</strong></td>
+                        <td>{{ ret.quantity }}</td>
+                        <td>{{ ret.reason }}</td>
+                        <td>{{ ret.supplier_name }}</td>
+                        <td>{{ ret.date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ ret.processed_by }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center;">No returns recorded</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </div>
+
+<style>
+.export-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.export-buttons a {
+    padding: 10px 20px !important;
+    white-space: nowrap;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table th {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+table td {
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
-<!-- Chart rendering is now handled by platform.js -->
+<!-- Chart rendering is handled by platform.js -->
 {% endblock %}

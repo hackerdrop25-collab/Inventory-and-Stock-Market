@@ -3,3 +3,5 @@ pymongo
 werkzeug
 mongomock
 yfinance
+python-dotenv
+email-validator
