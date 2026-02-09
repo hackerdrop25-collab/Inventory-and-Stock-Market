@@ -78,6 +78,10 @@ def validate_product_input(name, category, price, quantity, supplier):
     if not supplier or len(supplier.strip()) < 2:
         errors.append("Supplier must be at least 2 characters")
     
+    # Validate supplier contains only letters, spaces, and hyphens
+    if supplier and not re.match(r'^[a-zA-Z\s\-]+$', supplier):
+        errors.append("Supplier name must contain only letters, spaces, and hyphens")
+    
     return len(errors) == 0, errors
 
 def validate_sale_input(quantity, customer_name):
@@ -102,6 +106,10 @@ def validate_supplier_input(name, contact, email, address):
     
     if not name or len(name.strip()) < 2:
         errors.append("Supplier name must be at least 2 characters")
+    
+    # Validate supplier name contains only letters, spaces, and hyphens
+    if name and not re.match(r'^[a-zA-Z\s\-]+$', name):
+        errors.append("Supplier name must contain only letters, spaces, and hyphens")
     
     if not contact or len(contact.strip()) < 5:
         errors.append("Contact must be at least 5 characters")

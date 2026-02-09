@@ -17,20 +17,32 @@
     <div id="searchResults" style="margin-top: 20px; display: none;"></div>
 </div>
 
-<!-- User Watchlist -->
+<!-- User Watchlist Chart -->
 <div class="market-section">
-    <h3 style="margin-bottom: 15px; border-bottom: 2px solid var(--primary-color); display: inline-block;">My Watchlist
-    </h3>
+    <h3 style="margin-bottom: 15px; border-bottom: 2px solid var(--primary-color); display: inline-block;">My Watchlist - Price Comparison</h3>
+    <div class="glass-panel" style="padding: 20px; margin-bottom: 30px;">
+        <canvas id="watchlistChart" height="80"></canvas>
+    </div>
     <div id="userWatchlist" class="market-grid">
         <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
     </div>
 </div>
 
-<!-- Global Indices -->
+<!-- Global Indices Chart -->
 <div class="market-section" style="margin-top: 40px;">
-    <h3 style="margin-bottom: 15px; border-bottom: 2px solid var(--secondary-color); display: inline-block;">Global
-        Indices</h3>
+    <h3 style="margin-bottom: 15px; border-bottom: 2px solid var(--secondary-color); display: inline-block;">Global Indices - Performance</h3>
+    <div class="glass-panel" style="padding: 20px; margin-bottom: 30px;">
+        <canvas id="indicesChart" height="80"></canvas>
+    </div>
     <div id="globalIndices" class="market-grid">
+        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+    </div>
+</div>
+
+<!-- Market Overview Statistics -->
+<div class="market-section" style="margin-top: 40px;">
+    <h3 style="margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); display: inline-block;">Market Statistics</h3>
+    <div id="marketStats" class="market-grid">
         <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
     </div>
 </div>
@@ -76,7 +88,6 @@
         font-weight: 600;
         margin-bottom: 15px;
         height: 1.4em;
-        /* limit height */
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -119,5 +130,236 @@
         padding: 20px;
         color: var(--text-muted);
     }
+
+    .stat-card {
+        background: linear-gradient(135deg, rgba(66, 133, 244, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary-color);
+        margin-bottom: 5px;
+    }
+
+    .stat-label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
 </style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script src="{{ url_for('static', filename='js/platform.js') }}"></script>
+
+<script>
+    let watchlistChart = null;
+    let indicesChart = null;
+
+    async function loadMarketData() {
+        try {
+            const response = await fetch('/api/market-summary');
+            const data = await response.json();
+            
+            updateWatchlist(data.watchlist || []);
+            updateGlobalIndices(data.indices || []);
+            updateMarketStats(data);
+        } catch (error) {
+            console.error('Error loading market data:', error);
+        }
+    }
+
+    function updateWatchlist(items) {
+        const container = document.getElementById('userWatchlist');
+        
+        if (!items || items.length === 0) {
+            container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">No watchlist items</p>';
+            return;
+        }
+
+        // Prepare chart data
+        const symbols = items.map(item => item.symbol || 'Unknown');
+        const prices = items.map(item => parseFloat(item.price) || 0);
+        const changes = items.map(item => parseFloat(item.change) || 0);
+
+        // Update Chart
+        updateWatchlistChart(symbols, prices, changes);
+
+        // Update Cards
+        container.innerHTML = items.map(item => `
+            <div class="market-card">
+                <div class="market-header">
+                    <span class="symbol">${item.symbol || 'N/A'}</span>
+                </div>
+                <div class="name">${item.name || 'Unknown'}</div>
+                <div class="price">$${(item.price || 0).toFixed(2)}</div>
+                <div class="change-container ${item.change >= 0 ? 'positive' : 'negative'}">
+                    <i class="fas fa-${item.change >= 0 ? 'arrow-up' : 'arrow-down'}"></i>
+                    ${Math.abs(item.change || 0).toFixed(2)}%
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function updateGlobalIndices(items) {
+        const container = document.getElementById('globalIndices');
+        
+        if (!items || items.length === 0) {
+            container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">No market data available</p>';
+            return;
+        }
+
+        // Prepare chart data
+        const symbols = items.map(item => item.symbol || 'Unknown');
+        const values = items.map(item => parseFloat(item.price) || 0);
+        const changes = items.map(item => parseFloat(item.change) || 0);
+
+        // Update Chart
+        updateIndicesChart(symbols, changes);
+
+        // Update Cards
+        container.innerHTML = items.map(item => `
+            <div class="market-card">
+                <div class="market-header">
+                    <span class="symbol">${item.symbol || 'N/A'}</span>
+                </div>
+                <div class="name">${item.name || 'Unknown'}</div>
+                <div class="price">${(item.price || 0).toFixed(2)}</div>
+                <div class="change-container ${item.change >= 0 ? 'positive' : 'negative'}">
+                    <i class="fas fa-${item.change >= 0 ? 'arrow-up' : 'arrow-down'}"></i>
+                    ${Math.abs(item.change || 0).toFixed(2)}%
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function updateMarketStats(data) {
+        const container = document.getElementById('marketStats');
+        const stats = [
+            { label: 'Total Assets Tracked', value: (data.watchlist?.length || 0) + (data.indices?.length || 0) },
+            { label: 'Positive Markets', value: [...(data.watchlist || []), ...(data.indices || [])].filter(i => (i.change || 0) >= 0).length },
+            { label: 'Negative Markets', value: [...(data.watchlist || []), ...(data.indices || [])].filter(i => (i.change || 0) < 0).length },
+            { label: 'Last Updated', value: new Date().toLocaleTimeString() }
+        ];
+
+        container.innerHTML = stats.map(stat => `
+            <div class="stat-card">
+                <div class="stat-value">${stat.value}</div>
+                <div class="stat-label">${stat.label}</div>
+            </div>
+        `).join('');
+    }
+
+    function updateWatchlistChart(symbols, prices, changes) {
+        const ctx = document.getElementById('watchlistChart').getContext('2d');
+        
+        if (watchlistChart) {
+            watchlistChart.destroy();
+        }
+
+        watchlistChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: symbols,
+                datasets: [{
+                    label: 'Price ($)',
+                    data: prices,
+                    backgroundColor: prices.map((_, i) => changes[i] >= 0 ? '#4ade80' : '#f87171'),
+                    borderColor: prices.map((_, i) => changes[i] >= 0 ? '#22c55e' : '#ef4444'),
+                    borderWidth: 2,
+                    borderRadius: 8,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: true }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.7)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.7)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateIndicesChart(symbols, changes) {
+        const ctx = document.getElementById('indicesChart').getContext('2d');
+        
+        if (indicesChart) {
+            indicesChart.destroy();
+        }
+
+        indicesChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: symbols,
+                datasets: [{
+                    label: 'Change %',
+                    data: changes,
+                    borderColor: '#4285F4',
+                    backgroundColor: 'rgba(66, 133, 244, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 6,
+                    pointBackgroundColor: changes.map(c => c >= 0 ? '#4ade80' : '#f87171'),
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: true }
+                },
+                scales: {
+                    r: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.7)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', loadMarketData);
+
+    // Refresh data every 30 seconds
+    setInterval(loadMarketData, 30000);
+
+    // Search functionality
+    document.getElementById('marketSearchBtn').addEventListener('click', function() {
+        const symbol = document.getElementById('marketSearchInput').value.toUpperCase();
+        if (symbol) {
+            // This would typically search for the symbol via an API
+            alert('Searching for: ' + symbol);
+        }
+    });
+</script>
 {% endblock %}
