@@ -1,4 +1,22 @@
 import yfinance as yf
+import time
+import threading
+
+# Thread-safe Cache
+_market_cache = {}
+_cache_lock = threading.Lock()
+
+def get_cached_data(key, expiry_seconds):
+    with _cache_lock:
+        if key in _market_cache:
+            data, timestamp = _market_cache[key]
+            if time.time() - timestamp < expiry_seconds:
+                return data
+        return None
+
+def set_cached_data(key, data):
+    with _cache_lock:
+        _market_cache[key] = (data, time.time())
 
 def get_market_summary():
     """
@@ -14,6 +32,11 @@ def get_market_summary():
     # ^GDAXI: DAX (Germany)
     # BTC-USD: Bitcoin (Crypto)
     
+    cache_key = 'market_summary'
+    cached = get_cached_data(cache_key, 300) # 5 min expiry
+    if cached:
+        return cached
+
     symbols = ['^GSPC', '^IXIC', '^DJI', '^FTSE', '^NSEI', '^N225', '^GDAXI', 'BTC-USD']
     
     market_data = []
@@ -53,6 +76,10 @@ def get_market_summary():
     except Exception as e:
         print(f"Global error fetching market data: {e}")
         
+        
+    if market_data:
+        set_cached_data(cache_key, market_data)
+
     return market_data
 
 def get_symbol_name(symbol):
@@ -72,6 +99,11 @@ def get_stock_data(symbol):
     """
     Fetches real-time data for a specific stock symbol.
     """
+    cache_key = f"stock_{symbol.upper()}"
+    cached = get_cached_data(cache_key, 120) # 2 min expiry for stocks
+    if cached:
+        return cached
+
     try:
         # Validate symbol (basic alphanumeric check)
         if not symbol.replace('.','').replace('-','').isalnum():
@@ -122,3 +154,8 @@ def get_stock_data(symbol):
     except Exception as e:
         print(f"Error fetching {symbol}: {e}")
         return {'error': str(e)}
+    
+    if 'error' not in data:
+        set_cached_data(cache_key, data)
+    
+    return data

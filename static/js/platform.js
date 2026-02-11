@@ -14,7 +14,9 @@ class Platform {
         this.setupThemeSwitcher();
         this.setupActiveLinks();
         this.enhanceVisuals();
+        this.enhanceVisuals();
         this.loadDynamicData();
+        this.startRealtimeEngine();
     }
 
     async fetchApi(endpoint) {
@@ -46,8 +48,78 @@ class Platform {
         } else if (path === '/market') {
             this.setupMarketSearch();
             this.loadMarketPage();
-            // Real-time polling every 30s
-            setInterval(() => this.loadMarketPage(), 30000);
+        }
+    }
+
+    startRealtimeEngine() {
+        // Poll every 5 seconds for dashboard/global updates
+        this.updateHeartbeat();
+        setInterval(() => this.updateHeartbeat(), 5000);
+    }
+
+    async updateHeartbeat() {
+        if (window.location.pathname !== '/dashboard') return;
+
+        const data = await this.fetchApi('/realtime-updates');
+        if (!data || data.error) return;
+
+        this.renderStats(data.stats);
+        this.renderMarketWidget(data.market);
+        this.renderRecentSalesMini(data.recent_sales);
+
+        const timestampEl = document.getElementById('last-updated');
+        if (timestampEl) timestampEl.textContent = `Live: ${data.timestamp}`;
+    }
+
+    renderStats(stats) {
+        const els = {
+            'total-products': stats.total_products,
+            'low-stock': stats.low_stock,
+            'today-revenue': `$${stats.today_revenue.toFixed(2)}`
+        };
+
+        for (const [id, val] of Object.entries(els)) {
+            const el = document.getElementById(id);
+            if (el && el.textContent != val) {
+                el.classList.add('value-update');
+                el.textContent = val;
+                setTimeout(() => el.classList.remove('value-update'), 1000);
+
+                // Trigger Nexus event for significant changes
+                if (id === 'today-revenue' && window.nexusAnimation) {
+                    window.nexusAnimation.onEvent('sale', { amount: stats.today_revenue });
+                }
+            }
+        }
+    }
+
+    renderMarketWidget(market) {
+        const valEl = document.getElementById('market-widget-value');
+        const subEl = document.getElementById('market-widget-sub');
+        if (!valEl || !market || market.error) return;
+
+        valEl.textContent = market.price.toLocaleString();
+        const sign = market.change >= 0 ? '+' : '';
+        subEl.innerHTML = `${market.name} <span style="color: ${market.change >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">(${sign}${market.change_percent}%)</span>`;
+    }
+
+    renderRecentSalesMini(sales) {
+        const tableBody = document.querySelector('#recent-sales-table tbody');
+        if (!tableBody) return;
+
+        const currentRows = tableBody.querySelectorAll('tr');
+        const newHtml = sales.map(sale => `
+            <tr class="new-row">
+                <td>${sale.product_name}</td>
+                <td>${sale.date}</td>
+                <td>${sale.quantity}</td>
+                <td>$${sale.total_price.toFixed(2)}</td>
+                <td>${sale.sold_by}</td>
+            </tr>
+        `).join('') || '<tr><td colspan="5" style="text-align: center;">No recent sales</td></tr>';
+
+        if (tableBody.innerHTML.trim() !== newHtml.trim()) {
+            tableBody.innerHTML = newHtml;
         }
     }
 

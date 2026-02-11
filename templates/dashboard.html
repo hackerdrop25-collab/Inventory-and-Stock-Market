@@ -24,6 +24,15 @@
     </div>
 </div>
 
+<div style="display: flex; justify-content: flex-end; margin-top: -1 \.5rem; margin-bottom: 1rem;">
+    <div id="last-updated" class="glass-panel"
+        style="padding: 5px 15px; font-size: 0.8rem; color: var(--success-color); border-radius: 20px;">
+        <i class="fas fa-circle"
+            style="font-size: 0.5rem; vertical-align: middle; margin-right: 5px; animation: pulse 2s infinite;"></i>
+        Initializing Real-time...
+    </div>
+</div>
+
 <div class="charts-grid">
     <div class="glass-panel" style="padding: 20px;">
         <h2 style="margin-bottom: 1rem;">Monthly Sales Trend</h2>
@@ -80,149 +89,149 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
-const chartColors = {
-    primary: 'rgba(66, 133, 244, 1)',
-    success: 'rgba(52, 211, 153, 1)',
-    danger: 'rgba(239, 68, 68, 1)',
-    warning: 'rgba(251, 191, 36, 1)',
-    info: 'rgba(59, 130, 246, 1)'
-};
+    const chartColors = {
+        primary: 'rgba(66, 133, 244, 1)',
+        success: 'rgba(52, 211, 153, 1)',
+        danger: 'rgba(239, 68, 68, 1)',
+        warning: 'rgba(251, 191, 36, 1)',
+        info: 'rgba(59, 130, 246, 1)'
+    };
 
-const chartBgColors = {
-    primary: 'rgba(66, 133, 244, 0.1)',
-    success: 'rgba(52, 211, 153, 0.1)',
-    danger: 'rgba(239, 68, 68, 0.1)',
-    warning: 'rgba(251, 191, 36, 0.1)',
-    info: 'rgba(59, 130, 246, 0.1)'
-};
+    const chartBgColors = {
+        primary: 'rgba(66, 133, 244, 0.1)',
+        success: 'rgba(52, 211, 153, 0.1)',
+        danger: 'rgba(239, 68, 68, 0.1)',
+        warning: 'rgba(251, 191, 36, 0.1)',
+        info: 'rgba(59, 130, 246, 0.1)'
+    };
 
-// Fetch analytics data
-async function loadAnalytics() {
-    try {
-        const response = await fetch('/api/analytics/dashboard');
-        const data = await response.json();
-        
-        // Sales Trend Chart
-        const trendCtx = document.getElementById('salesTrendChart').getContext('2d');
-        new Chart(trendCtx, {
-            type: 'line',
-            data: {
-                labels: data.monthly_trend.map(d => d._id),
-                datasets: [{
-                    label: 'Daily Sales ($)',
-                    data: data.monthly_trend.map(d => d.total),
-                    borderColor: chartColors.primary,
-                    backgroundColor: chartBgColors.primary,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    pointBackgroundColor: chartColors.primary
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: true, labels: { color: 'rgba(255,255,255,0.8)' } }
+    // Fetch analytics data
+    async function loadAnalytics() {
+        try {
+            const response = await fetch('/api/analytics/dashboard');
+            const data = await response.json();
+
+            // Sales Trend Chart
+            const trendCtx = document.getElementById('salesTrendChart').getContext('2d');
+            new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: data.monthly_trend.map(d => d._id),
+                    datasets: [{
+                        label: 'Daily Sales ($)',
+                        data: data.monthly_trend.map(d => d.total),
+                        borderColor: chartColors.primary,
+                        backgroundColor: chartBgColors.primary,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: chartColors.primary
+                    }]
                 },
-                scales: {
-                    y: { beginAtZero: true, ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-                    x: { ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: true, labels: { color: 'rgba(255,255,255,0.8)' } }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        x: { ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    }
                 }
-            }
-        });
-        
-        // Inventory Status Chart
-        const invCtx = document.getElementById('inventoryChart').getContext('2d');
-        const invStats = data.inventory_stats;
-        new Chart(invCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['In Stock', 'Low Stock', 'Out of Stock'],
-                datasets: [{
-                    data: [invStats.in_stock, invStats.low_stock, invStats.out_of_stock],
-                    backgroundColor: [chartColors.success, chartColors.warning, chartColors.danger],
-                    borderColor: 'rgba(0,0,0,0.2)',
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom', labels: { color: 'rgba(255,255,255,0.8)' } }
-                }
-            }
-        });
-        
-        // Top Products Chart
-        const topCtx = document.getElementById('topProductsChart').getContext('2d');
-        new Chart(topCtx, {
-            type: 'bar',
-            data: {
-                labels: data.top_products.map(p => p._id),
-                datasets: [{
-                    label: 'Revenue ($)',
-                    data: data.top_products.map(p => p.revenue),
-                    backgroundColor: chartColors.info,
-                    borderColor: 'rgba(59, 130, 246, 0.5)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                plugins: {
-                    legend: { display: true, labels: { color: 'rgba(255,255,255,0.8)' } }
+            });
+
+            // Inventory Status Chart
+            const invCtx = document.getElementById('inventoryChart').getContext('2d');
+            const invStats = data.inventory_stats;
+            new Chart(invCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['In Stock', 'Low Stock', 'Out of Stock'],
+                    datasets: [{
+                        data: [invStats.in_stock, invStats.low_stock, invStats.out_of_stock],
+                        backgroundColor: [chartColors.success, chartColors.warning, chartColors.danger],
+                        borderColor: 'rgba(0,0,0,0.2)',
+                        borderWidth: 2
+                    }]
                 },
-                scales: {
-                    x: { ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-                    y: { ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { display: false } }
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: 'rgba(255,255,255,0.8)' } }
+                    }
                 }
-            }
-        });
-        
-        // Category Sales Chart
-        const catCtx = document.getElementById('categorySalesChart').getContext('2d');
-        const colors = [chartColors.primary, chartColors.success, chartColors.warning, chartColors.danger, chartColors.info];
-        new Chart(catCtx, {
-            type: 'pie',
-            data: {
-                labels: data.category_sales.map(c => c._id || 'Uncategorized'),
-                datasets: [{
-                    data: data.category_sales.map(c => c.total),
-                    backgroundColor: colors.slice(0, data.category_sales.length),
-                    borderColor: 'rgba(0,0,0,0.2)',
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom', labels: { color: 'rgba(255,255,255,0.8)' } }
+            });
+
+            // Top Products Chart
+            const topCtx = document.getElementById('topProductsChart').getContext('2d');
+            new Chart(topCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.top_products.map(p => p._id),
+                    datasets: [{
+                        label: 'Revenue ($)',
+                        data: data.top_products.map(p => p.revenue),
+                        backgroundColor: chartColors.info,
+                        borderColor: 'rgba(59, 130, 246, 0.5)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    plugins: {
+                        legend: { display: true, labels: { color: 'rgba(255,255,255,0.8)' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        y: { ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { display: false } }
+                    }
                 }
-            }
-        });
-    } catch (error) {
-        console.error('Error loading analytics:', error);
+            });
+
+            // Category Sales Chart
+            const catCtx = document.getElementById('categorySalesChart').getContext('2d');
+            const colors = [chartColors.primary, chartColors.success, chartColors.warning, chartColors.danger, chartColors.info];
+            new Chart(catCtx, {
+                type: 'pie',
+                data: {
+                    labels: data.category_sales.map(c => c._id || 'Uncategorized'),
+                    datasets: [{
+                        data: data.category_sales.map(c => c.total),
+                        backgroundColor: colors.slice(0, data.category_sales.length),
+                        borderColor: 'rgba(0,0,0,0.2)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: 'rgba(255,255,255,0.8)' } }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error loading analytics:', error);
+        }
     }
-}
 
-// Load charts when page loads
-document.addEventListener('DOMContentLoaded', loadAnalytics);
+    // Load charts when page loads
+    document.addEventListener('DOMContentLoaded', loadAnalytics);
 </script>
 
 <style>
-.charts-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-    gap: 2rem;
-    margin-top: 2rem;
-}
-
-@media (max-width: 768px) {
     .charts-grid {
-        grid-template-columns: 1fr;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+        gap: 2rem;
+        margin-top: 2rem;
     }
-}
+
+    @media (max-width: 768px) {
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 {% endblock %}

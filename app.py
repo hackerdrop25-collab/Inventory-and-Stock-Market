@@ -870,9 +870,13 @@ def api_market_data():
 @app.route('/api/market/search')
 @login_required
 def api_market_search():
-    symbol = request.args.get('symbol')
+    symbol = request.args.get('symbol', '').strip().upper()
     if not symbol:
         return jsonify({'error': 'No symbol provided'}), 400
+    
+    # Advanced security check for symbol
+    if not symbol.replace('.','').replace('-','').isalnum() or len(symbol) > 10:
+        return jsonify({'error': 'Invalid symbol format'}), 400
     
     # Import here to avoid circular dependency if any, or just ensure it's available
     from market_utils import get_stock_data
@@ -904,7 +908,10 @@ def api_watchlist():
 
     if request.method == 'POST':
         data = request.get_json()
-        symbol = data.get('symbol').upper()
+        symbol = data.get('symbol', '').upper().strip()
+        
+        if not symbol or not symbol.replace('.','').replace('-','').isalnum() or len(symbol) > 10:
+             return jsonify({'error': 'Invalid symbol format'}), 400
         
         users_collection.update_one(
             user_query, 
@@ -1058,6 +1065,46 @@ def api_trade():
         'new_balance': new_wallet,
         'portfolio': portfolio
     })
+
+@app.route('/api/realtime-updates')
+@login_required
+def api_realtime_updates():
+    """Unified API for real-time dashboard updates"""
+    try:
+        # 1. Statistics
+        total_products = products_collection.count_documents({})
+        low_stock = products_collection.count_documents({'quantity': {'$lte': 5}})
+        
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_sales = sales_collection.aggregate([
+            {'$match': {'date': {'$gte': today_start}}},
+            {'$group': {'_id': None, 'total': {'$sum': '$total_price'}}}
+        ])
+        today_revenue = list(today_sales)[0]['total'] if today_sales else 0
+        
+        # 2. Market Highlight (S&P 500)
+        from market_utils import get_stock_data
+        market_highlight = get_stock_data('^GSPC')
+
+        # 3. Recent Sales (last 3)
+        recent_sales = list(sales_collection.find().sort('date', -1).limit(3))
+        for s in recent_sales:
+            s['_id'] = str(s['_id'])
+            s['product_id'] = str(s['product_id'])
+            s['date'] = s['date'].strftime('%H:%M:%S')
+
+        return jsonify({
+            'stats': {
+                'total_products': total_products,
+                'low_stock': low_stock,
+                'today_revenue': today_revenue
+            },
+            'market': market_highlight,
+            'recent_sales': recent_sales,
+            'timestamp': datetime.now().strftime('%H:%M:%S')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
