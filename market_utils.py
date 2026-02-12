@@ -129,13 +129,16 @@ def get_stock_data(symbol):
                 change = price - prev_close
                 change_percent = (change / prev_close) * 100
             
+            # Additional advanced metadata
+            day_high = info.get('dayHigh')
+            day_low = info.get('dayLow')
+            volume = info.get('lastVolume')
+            currency = info.get('currency', 'USD')
+
             # Try to get short name, fallback to symbol
             name = symbol
             try:
-                # Some versions of yfinance put metadata in .info dict which triggers a separate request
-                # We'll try to keep it fast, but if we need name, we might need .info
-                # maximizing speed: use symbol as name if fetching full info is too slow/rate-limited
-                # let's try getting name from ticker.info only if needed, or just use symbol
+                # Optimized name fetching
                 name = ticker.info.get('shortName', symbol) 
             except:
                 pass
@@ -146,6 +149,10 @@ def get_stock_data(symbol):
                 'price': round(price, 2),
                 'change': round(change, 2),
                 'change_percent': round(change_percent, 2),
+                'high': round(day_high, 2) if day_high else None,
+                'low': round(day_low, 2) if day_low else None,
+                'volume': volume,
+                'currency': currency,
                 'color': 'green' if change >= 0 else 'red'
             }
         else:

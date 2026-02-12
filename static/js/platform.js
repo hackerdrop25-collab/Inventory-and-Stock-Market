@@ -46,7 +46,6 @@ class Platform {
             const data = await this.fetchApi('/sales');
             if (data) this.renderSales(data);
         } else if (path === '/market') {
-            this.setupMarketSearch();
             this.loadMarketPage();
         }
     }
@@ -55,6 +54,11 @@ class Platform {
         // Poll every 5 seconds for dashboard/global updates
         this.updateHeartbeat();
         setInterval(() => this.updateHeartbeat(), 5000);
+
+        // Faster heartrate for market page
+        setInterval(() => {
+            if (window.location.pathname === '/market') this.loadMarketPage();
+        }, 15000);
     }
 
     async updateHeartbeat() {
@@ -439,49 +443,274 @@ class Platform {
     }
 
     async loadMarketPage() {
-        // Load Global Indices
-        const globalData = await this.fetchApi('/market');
-        const watchlistData = await this.fetchApi('/market/watchlist');
+        this.setupMarketSearch();
+        this.setupTradeModal();
 
-        this.renderMarketList('globalIndices', globalData);
-        this.renderMarketList('userWatchlist', watchlistData);
+        // Parallel fetch for speed
+        const [globalData, watchlistData, portfolioData] = await Promise.all([
+            this.fetchApi('/market'),
+            this.fetchApi('/market/watchlist'),
+            this.fetchApi('/market/portfolio')
+        ]);
+
+        this.renderIndicesTicker(globalData);
+        this.renderWatchlistGrid(watchlistData);
+        this.renderPortfolio(portfolioData);
+        this.renderMarketStats(globalData, watchlistData);
     }
 
-    renderMarketList(elementId, data) {
-        const container = document.getElementById(elementId);
+    renderIndicesTicker(data) {
+        const container = document.getElementById('indicesTicker');
+        if (!container || !data || data.error) return;
+
+        container.innerHTML = data.map(item => `
+            <div class="ticker-item" onclick="platform.setActiveSymbol('${item.symbol}')">
+                <span class="ticker-symbol">${item.symbol}</span>
+                <span class="ticker-price">${item.price.toLocaleString()}</span>
+                <span class="ticker-change ${item.change >= 0 ? 'positive' : 'negative'}">
+                    ${item.change >= 0 ? '+' : ''}${item.change_percent}%
+                </span>
+            </div>
+        `).join('') + container.innerHTML; // Simple marquee effect if styled right
+    }
+
+    renderWatchlistGrid(data) {
+        const container = document.getElementById('userWatchlistGrid');
         if (!container) return;
 
         if (!data || data.length === 0) {
-            container.innerHTML = '<p class="text-muted">No data available.</p>';
+            container.innerHTML = '<div class="text-muted" style="grid-column: 1/-1; text-align: center; padding: 40px;">No stocks in watchlist. Search to add.</div>';
             return;
         }
 
-        container.innerHTML = data.map(item => {
-            const isPositive = item.change >= 0;
-            const colorClass = isPositive ? 'positive' : 'negative';
-            const sign = isPositive ? '+' : '';
-            const isWatchlist = elementId === 'userWatchlist';
-
-            return `
-            <div class="market-card" data-symbol="${item.symbol}">
+        container.innerHTML = data.map(item => `
+            <div class="market-card ${this.activeSymbol === item.symbol ? 'active' : ''}" 
+                 onclick="platform.setActiveSymbol('${item.symbol}')">
                 <div class="market-header">
                     <span class="symbol">${item.symbol}</span>
-                    <span class="${colorClass}">${sign}${item.change_percent}%</span>
+                    <button class="btn-icon" onclick="event.stopPropagation(); platform.removeFromWatchlist('${item.symbol}')">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
                 <div class="name">${item.name}</div>
-                <div class="price">${item.price.toLocaleString()}</div>
-                <div class="change-container ${colorClass}">
-                    <span>${sign}${item.change}</span>
+                <div class="price">$${item.price.toLocaleString()}</div>
+                <div class="change-container ${item.change >= 0 ? 'positive' : 'negative'}">
+                    ${item.change >= 0 ? '+' : ''}${item.change_percent}%
                 </div>
-                ${isWatchlist ? `
-                <button class="btn-icon delete-btn" onclick="platform.removeFromWatchlist('${item.symbol}')" 
-                    style="position: absolute; top: 10px; right: 10px; opacity: 0.5;">
-                    <i class="fas fa-times"></i>
-                </button>
-                ` : ''}
             </div>
-            `;
-        }).join('');
+        `).join('');
+    }
+
+    renderPortfolio(data) {
+        const container = document.getElementById('portfolioSummary');
+        if (!container || !data || data.error) return;
+
+        this.userWallet = data.wallet;
+
+        container.innerHTML = `
+            <div class="portfolio-stats">
+                <div class="portfolio-item">
+                    <span class="label">Balance</span>
+                    <span class="value">$${data.wallet.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div class="portfolio-item">
+                    <span class="label">Equity</span>
+                    <span class="value">$${data.portfolio_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div class="portfolio-item highlight">
+                    <span class="label">Total Value</span>
+                    <span class="value">$${data.total_account_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+            </div>
+            
+            <div class="holdings-list" style="margin-top: 20px;">
+                <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px;">Holdings</h4>
+                ${data.portfolio.length > 0 ? data.portfolio.map(h => `
+                    <div class="holding-row" onclick="platform.setActiveSymbol('${h.symbol}')">
+                        <span class="h-symbol">${h.symbol}</span>
+                        <span class="h-qty">${h.quantity}</span>
+                        <span class="h-pl ${h.pl >= 0 ? 'positive' : 'negative'}">
+                            ${h.pl >= 0 ? '+' : ''}$${Math.abs(h.pl).toFixed(2)}
+                        </span>
+                    </div>
+                `).join('') : '<p class="text-muted" style="font-size: 0.8rem;">No holdings yet</p>'}
+            </div>
+        `;
+    }
+
+    renderMarketStats(indices, watchlist) {
+        const container = document.getElementById('marketStatsContainer');
+        if (!container) return;
+
+        const all = [...(indices || []), ...(watchlist || [])];
+        const positiveCount = all.filter(i => (i.change || 0) >= 0).length;
+        const negativeCount = all.filter(i => (i.change || 0) < 0).length;
+
+        container.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-value">${positiveCount} / ${all.length}</div>
+                <div class="stat-label">Advancers vs Total</div>
+            </div>
+            <div class="stat-card" style="margin-top: 10px;">
+                <div class="stat-value" style="color: ${positiveCount >= negativeCount ? 'var(--success-color)' : 'var(--danger-color)'}">
+                    ${positiveCount >= negativeCount ? 'BULLISH' : 'BEARISH'}
+                </div>
+                <div class="stat-label">Market Sentiment</div>
+            </div>
+        `;
+    }
+
+    setActiveSymbol(symbol) {
+        if (this.activeSymbol === symbol) return;
+        this.activeSymbol = symbol;
+
+        // Update selection in grid
+        document.querySelectorAll('.market-card').forEach(card => {
+            card.classList.toggle('active', card.dataset.symbol === symbol);
+        });
+
+        this.initTradingView(symbol);
+        this.updateActiveInfo(symbol);
+    }
+
+    async updateActiveInfo(symbol) {
+        const data = await this.fetchApi(`/market/search?symbol=${symbol}`);
+        if (!data || data.error) return;
+
+        document.getElementById('activeSymbolName').textContent = data.name;
+        document.getElementById('activeSymbolPrice').textContent = `$${data.price.toLocaleString()}`;
+
+        const changeEl = document.getElementById('activeSymbolChange');
+        changeEl.textContent = `${data.change >= 0 ? '+' : ''}${data.change} (${data.change_percent}%)`;
+        changeEl.className = `active-change ${data.change >= 0 ? 'positive' : 'negative'}`;
+
+        // Enable trading buttons
+        const buyBtn = document.getElementById('buyBtn');
+        const sellBtn = document.getElementById('sellBtn');
+        if (buyBtn) {
+            buyBtn.disabled = false;
+            buyBtn.onclick = () => this.openTradeModal(data, 'BUY');
+        }
+        if (sellBtn) {
+            sellBtn.disabled = false;
+            sellBtn.onclick = () => this.openTradeModal(data, 'SELL');
+        }
+
+        if (window.nexusAnimation) {
+            window.nexusAnimation.onEvent('market_update', {
+                volatility: Math.abs(data.change_percent),
+                isPositive: data.change >= 0
+            });
+        }
+    }
+
+    initTradingView(symbol) {
+        const container = document.getElementById('tradingview_widget');
+        if (!container || !window.TradingView) return;
+
+        container.innerHTML = ''; // Clear placeholder
+
+        // Format symbol for TV (add exchange prefix if needed, yfinance symbols might need mapping)
+        let tvSymbol = symbol;
+        if (symbol.startsWith('^')) {
+            const indexMap = { '^GSPC': 'SPX', '^IXIC': 'NASDAQ:IXIC', '^DJI': 'DJ:DJI', '^NSEI': 'NSE:NIFTY' };
+            tvSymbol = indexMap[symbol] || symbol.replace('^', '');
+        } else if (symbol.includes('-USD')) {
+            tvSymbol = 'COINBASE:' + symbol.replace('-USD', 'USD');
+        }
+
+        new TradingView.widget({
+            "autosize": true,
+            "symbol": tvSymbol,
+            "interval": "D",
+            "timezone": "Etc/UTC",
+            "theme": localStorage.getItem('theme') || 'dark',
+            "style": "1",
+            "locale": "en",
+            "toolbar_bg": "#f1f3f6",
+            "enable_publishing": false,
+            "hide_side_toolbar": false,
+            "allow_symbol_change": true,
+            "container_id": "tradingview_widget"
+        });
+    }
+
+    setupTradeModal() {
+        if (this.tradeModalInitialized) return;
+
+        const modal = document.getElementById('tradeModal');
+        const closeBtn = document.querySelector('.close-modal');
+        const form = document.getElementById('tradeForm');
+        const qtyInput = document.getElementById('tradeQuantity');
+
+        if (!modal || !closeBtn || !form) return;
+
+        closeBtn.onclick = () => modal.style.display = 'none';
+        window.onclick = (event) => { if (event.target == modal) modal.style.display = 'none'; };
+
+        qtyInput.oninput = () => {
+            const total = (parseFloat(qtyInput.value) || 0) * this.currentTradePrice;
+            document.getElementById('tradeTotal').textContent = `$${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        };
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('confirmTradeBtn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            try {
+                const response = await fetch(`${this.apiBase}/market/trade`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        symbol: this.currentTradeSymbol,
+                        quantity: qtyInput.value,
+                        type: this.currentTradeType
+                    })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    modal.style.display = 'none';
+                    this.loadMarketPage(); // Refresh
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Transaction failed');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        };
+
+        this.tradeModalInitialized = true;
+    }
+
+    openTradeModal(stock, type) {
+        const modal = document.getElementById('tradeModal');
+        this.currentTradeSymbol = stock.symbol;
+        this.currentTradePrice = stock.price;
+        this.currentTradeType = type;
+
+        document.getElementById('tradeModalTitle').textContent = `${type === 'BUY' ? 'Buy' : 'Sell'} ${stock.symbol}`;
+        document.getElementById('tradeSymbol').textContent = stock.symbol;
+        document.getElementById('tradePrice').textContent = `$${stock.price.toLocaleString()}`;
+        document.getElementById('tradeWallet').textContent = `$${this.userWallet.toLocaleString()}`;
+
+        const qtyInput = document.getElementById('tradeQuantity');
+        qtyInput.value = 1;
+        document.getElementById('tradeTotal').textContent = `$${stock.price.toLocaleString()}`;
+
+        const confirmBtn = document.getElementById('confirmTradeBtn');
+        confirmBtn.className = `btn btn-block ${type === 'BUY' ? 'btn-success' : 'btn-danger'}`;
+        confirmBtn.textContent = `Confirm ${type}`;
+
+        modal.style.display = 'block';
     }
 
     /**

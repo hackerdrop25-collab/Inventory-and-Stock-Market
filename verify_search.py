@@ -8,8 +8,10 @@ def test_search(symbol):
         print(f"Error: {data['error']}")
     else:
         print(f"Found: {data['name']} ({data['symbol']})")
-        print(f"Price: {data['price']}")
+        print(f"Price: {data['price']} {data.get('currency', 'USD')}")
         print(f"Change: {data['change']} ({data['change_percent']}%)")
+        print(f"High/Low: {data.get('high')} / {data.get('low')}")
+        print(f"Volume: {data.get('volume')}")
     print("-" * 30)
 
 if __name__ == "__main__":
