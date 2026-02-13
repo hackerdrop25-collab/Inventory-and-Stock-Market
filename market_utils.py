@@ -37,7 +37,7 @@ def get_market_summary():
     if cached:
         return cached
 
-    symbols = ['^GSPC', '^IXIC', '^DJI', '^FTSE', '^NSEI', '^N225', '^GDAXI', 'BTC-USD']
+    symbols = ['^GSPC', '^IXIC', '^DJI', '^FTSE', '^NSEI', '^N225', '^GDAXI', '^HSI', '^FCHI', '^STOXX50E', 'BTC-USD', 'ETH-USD', 'GC=F', 'CL=F']
     
     market_data = []
     
@@ -91,7 +91,13 @@ def get_symbol_name(symbol):
         '^NSEI': 'Nifty 50',
         '^N225': 'Nikkei 225',
         '^GDAXI': 'DAX',
-        'BTC-USD': 'Bitcoin'
+        '^HSI': 'Hang Seng',
+        '^FCHI': 'CAC 40',
+        '^STOXX50E': 'Euro Stoxx 50',
+        'BTC-USD': 'Bitcoin',
+        'ETH-USD': 'Ethereum',
+        'GC=F': 'Gold',
+        'CL=F': 'Crude Oil'
     }
     return names.get(symbol, symbol)
 

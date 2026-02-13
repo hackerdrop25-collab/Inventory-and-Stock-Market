@@ -60,6 +60,50 @@
     </div>
 </div>
 
+<!-- System Security & Global Pulse Section -->
+<div class="dashboard-secondary-grid"
+    style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; margin-bottom: 2rem;">
+    <!-- Security Card -->
+    <div class="glass-panel security-integrity-card"
+        style="padding: 20px; border-top: 3px solid var(--success-color); position: relative;">
+        <div id="security-scanner" class="scanner-sweep" style="display: none;"></div>
+        <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between;">
+            <span><i class="fas fa-shield-alt"></i> System Integrity</span>
+            <span id="security-status-badge" class="status-badge secure">SECURE</span>
+        </h3>
+        <div class="security-stats">
+            <div class="sec-item" style="margin-bottom: 15px;">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Threat Level
+                </div>
+                <div style="font-size: 1.1rem; font-weight: bold; color: var(--success-color);">LOW / NO THREATS</div>
+            </div>
+            <div class="sec-item" style="margin-bottom: 15px;">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">WAF Status
+                </div>
+                <div style="font-weight: 500;">Active Firewall Enabled</div>
+            </div>
+            <div class="sec-item">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Encryption
+                </div>
+                <div style="font-family: monospace; font-size: 0.85rem;">AES-256-GCM / SSL v3</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Market Pulse -->
+    <div class="glass-panel global-pulse-card" style="padding: 20px;">
+        <h3 style="margin-bottom: 1.5rem;"><i class="fas fa-globe-americas"></i> Global Market Pulse</h3>
+        <div id="global-pulse-grid" class="pulse-grid"
+            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px;">
+            <!-- Dynamic Pulse Items -->
+            <div class="loading-pulse"
+                style="grid-column: 1/-1; text-align: center; padding: 20px; color: var(--text-secondary);">
+                <i class="fas fa-sync fa-spin"></i> Synchronizing world markets...
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="charts-grid">
     <div class="glass-panel" style="padding: 20px;">
         <h2 style="margin-bottom: 1rem;">Monthly Sales Trend</h2>

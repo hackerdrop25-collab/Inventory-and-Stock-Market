@@ -274,7 +274,58 @@ class Platform {
             `).join('') || '<tr><td colspan="5" style="text-align: center;">No recent sales</td></tr>';
         }
 
+        // Render Global Market Pulse
+        if (data.global_market) {
+            this.renderGlobalPulse(data.global_market);
+        }
+
+        // Update Security Status
+        if (data.security) {
+            this.updateSecurityUI(data.security);
+        }
+
         this.loadAIInsights();
+    }
+
+    renderGlobalPulse(marketData) {
+        const container = document.getElementById('global-pulse-grid');
+        if (!container) return;
+
+        container.innerHTML = marketData.map(item => `
+            <div class="pulse-card">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span style="font-weight: bold; font-size: 0.85rem;">${item.name}</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">${item.symbol}</span>
+                </div>
+                <div style="display: flex; align-items: baseline; gap: 8px;">
+                    <span style="font-size: 1rem; font-weight: bold;">${item.price.toLocaleString()}</span>
+                    <span style="color: var(--${item.color}-color); font-size: 0.75rem; font-weight: 500;">
+                        ${item.change > 0 ? '+' : ''}${item.change_percent.toFixed(2)}%
+                    </span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    updateSecurityUI(security) {
+        const badge = document.getElementById('security-status-badge');
+        const scanner = document.getElementById('security-scanner');
+
+        if (badge) {
+            badge.textContent = security.status;
+            badge.className = `status-badge ${security.status.toLowerCase()}`;
+        }
+
+        if (scanner) {
+            scanner.style.display = 'block';
+            setTimeout(() => scanner.style.display = 'none', 3000); // Pulse effect on update
+        }
+
+        if (window.nexusAnimation) {
+            if (security.status !== 'SECURE') {
+                window.nexusAnimation.onEvent('low_stock'); // Trigger alert state in background
+            }
+        }
     }
 
     async loadAIInsights() {

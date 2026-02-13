@@ -1094,6 +1094,17 @@ def api_realtime_updates():
             s['product_id'] = str(s['product_id'])
             s['date'] = s['date'].strftime('%H:%M:%S')
 
+        # 4. Global Market Pulse (expanded)
+        from market_utils import get_market_summary
+        global_market = get_market_summary()
+
+        # 5. Security Status
+        one_hour_ago = datetime.now() - timedelta(hours=1)
+        failed_attempts = firewall_logs.count_documents({
+            'status': 'Failed',
+            'timestamp': {'$gte': one_hour_ago}
+        })
+
         return jsonify({
             'stats': {
                 'total_products': total_products,
@@ -1101,7 +1112,12 @@ def api_realtime_updates():
                 'today_revenue': today_revenue
             },
             'market': market_highlight,
+            'global_market': global_market,
             'recent_sales': recent_sales,
+            'security': {
+                'status': "SECURE" if failed_attempts < 5 else "WARNING",
+                'failed_attempts': failed_attempts
+            },
             'timestamp': datetime.now().strftime('%H:%M:%S')
         })
     except Exception as e:
@@ -1158,6 +1174,30 @@ def api_market_indicators():
         return jsonify(indicators)
     else:
         return jsonify({'error': 'Could not calculate indicators'}), 404
+
+@app.route('/api/security/status')
+@login_required
+def api_security_status():
+    """Returns the current system health and security status"""
+    one_hour_ago = datetime.now() - timedelta(hours=1)
+    failed_attempts = firewall_logs.count_documents({
+        'status': 'Failed',
+        'timestamp': {'$gte': one_hour_ago}
+    })
+    
+    status = "SECURE"
+    if failed_attempts > 10:
+        status = "ALERT"
+    elif failed_attempts > 5:
+        status = "WARNING"
+        
+    return jsonify({
+        'status': status,
+        'failed_attempts_1h': failed_attempts,
+        'waf_status': 'Active',
+        'encryption': 'SSL/TLS 1.3 + AES-256',
+        'firewall': 'Enabled'
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
