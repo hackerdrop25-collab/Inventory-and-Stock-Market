@@ -5,3 +5,4 @@ mongomock
 yfinance
 python-dotenv
 email-validator
+google-generativeai

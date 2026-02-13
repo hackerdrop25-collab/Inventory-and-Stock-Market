@@ -166,3 +166,35 @@ def get_stock_data(symbol):
         set_cached_data(cache_key, data)
     
     return data
+
+def get_technical_indicators(symbol):
+    """
+    Calculates basic technical indicators (SMA20, RSI).
+    """
+    try:
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period="1mo")
+        if hist.empty or len(hist) < 15:
+            return None
+        
+        # RSI Calculation
+        delta = hist['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        current_rsi = rsi.iloc[-1]
+        
+        # SMA 20 (or max available)
+        sma_20 = hist['Close'].rolling(window=20).mean().iloc[-1]
+        if not sma_20:
+             sma_20 = hist['Close'].mean()
+
+        return {
+            'sma_20': round(sma_20, 2),
+            'rsi': round(current_rsi, 2),
+            'signal': 'OVERBOUGHT' if current_rsi > 70 else ('OVERSOLD' if current_rsi < 30 else 'NEUTRAL')
+        }
+    except Exception as e:
+        print(f"Indicator error for {symbol}: {e}")
+        return None

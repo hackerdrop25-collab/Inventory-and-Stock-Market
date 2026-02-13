@@ -273,6 +273,36 @@ class Platform {
                 </tr>
             `).join('') || '<tr><td colspan="5" style="text-align: center;">No recent sales</td></tr>';
         }
+
+        this.loadAIInsights();
+    }
+
+    async loadAIInsights() {
+        const marketEl = document.getElementById('ai-market-text');
+        const inventoryEl = document.getElementById('ai-inventory-text');
+
+        if (marketEl) {
+            const data = await this.fetchApi('/ai/market-insights');
+            if (data && data.insights) {
+                marketEl.textContent = data.insights;
+                marketEl.classList.add('ai-fade-in');
+            }
+        }
+
+        if (inventoryEl) {
+            const data = await this.fetchApi('/ai/inventory-advice');
+            if (data && data.advice) {
+                // Convert markdown-ish bullets to HTML
+                const formattedAdvice = data.advice
+                    .replace(/^\d\.\s/gm, '• ') // Normalize numbering to bullets
+                    .split('\n')
+                    .filter(line => line.trim())
+                    .map(line => `<div style="margin-bottom: 5px;">${line}</div>`)
+                    .join('');
+                inventoryEl.innerHTML = formattedAdvice;
+                inventoryEl.classList.add('ai-fade-in');
+            }
+        }
     }
 
     renderProducts(data) {
@@ -457,6 +487,37 @@ class Platform {
         this.renderWatchlistGrid(watchlistData);
         this.renderPortfolio(portfolioData);
         this.renderMarketStats(globalData, watchlistData);
+        this.loadNews(); // General market news by default
+    }
+
+    async loadNews(symbol = '') {
+        const container = document.getElementById('newsFeedContainer');
+        if (!container) return;
+
+        const data = await this.fetchApi(`/market/news${symbol ? `?symbol=${symbol}` : ''}`);
+        if (!data || data.length === 0) {
+            container.innerHTML = '<div class="text-muted" style="text-align: center; padding: 20px; font-size: 0.8rem;">No recent news for this symbol.</div>';
+            return;
+        }
+
+        container.innerHTML = data.map(news => `
+            <a href="${news.link}" target="_blank" class="news-item-link" style="text-decoration: none; color: inherit;">
+                <div class="news-item" style="padding: 10px; border-radius: 8px; margin-bottom: 10px; background: rgba(255,255,255,0.02); transition: background 0.2s;">
+                    <div class="news-details">
+                        <div class="news-title" style="font-size: 0.85rem; font-weight: 500; margin-bottom: 5px; line-height: 1.4;">${news.title}</div>
+                        <div class="news-meta" style="font-size: 0.7rem; color: var(--text-secondary);">
+                            <span>${news.publisher}</span> • <span>${news.time}</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        `).join('');
+
+        // Hover effect for news items
+        container.querySelectorAll('.news-item').forEach(item => {
+            item.onmouseenter = () => item.style.background = 'rgba(255,255,255,0.06)';
+            item.onmouseleave = () => item.style.background = 'rgba(255,255,255,0.02)';
+        });
     }
 
     renderIndicesTicker(data) {
@@ -571,6 +632,39 @@ class Platform {
 
         this.initTradingView(symbol);
         this.updateActiveInfo(symbol);
+        this.loadNews(symbol);
+        this.updateIndicators(symbol);
+    }
+
+    async updateIndicators(symbol) {
+        const container = document.getElementById('techIndicators');
+        if (!container) return;
+
+        container.style.display = 'none';
+
+        const data = await this.fetchApi(`/market/indicators?symbol=${symbol}`);
+        if (!data || data.error) return;
+
+        container.style.display = 'flex';
+        document.getElementById('smaVal').textContent = data.sma_20 || '--';
+        document.getElementById('rsiVal').textContent = data.rsi || '--';
+
+        const signalEl = document.getElementById('signalVal');
+        signalEl.textContent = data.signal || '--';
+
+        if (data.signal === 'OVERBOUGHT') {
+            signalEl.style.background = 'rgba(239, 68, 68, 0.2)';
+            signalEl.style.color = 'var(--danger-color)';
+            signalEl.style.border = '1px solid var(--danger-color)';
+        } else if (data.signal === 'OVERSOLD') {
+            signalEl.style.background = 'rgba(16, 185, 129, 0.2)';
+            signalEl.style.color = 'var(--success-color)';
+            signalEl.style.border = '1px solid var(--success-color)';
+        } else {
+            signalEl.style.background = 'rgba(255, 255, 255, 0.05)';
+            signalEl.style.color = 'var(--text-secondary)';
+            signalEl.style.border = '1px solid var(--glass-border)';
+        }
     }
 
     async updateActiveInfo(symbol) {

@@ -23,6 +23,13 @@
                     <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i></div>
                 </div>
             </div>
+
+            <div class="glass-panel news-widget" style="margin-top: 20px; max-height: 500px; overflow-y: auto;">
+                <h3><i class="fas fa-newspaper"></i> Market News</h3>
+                <div id="newsFeedContainer">
+                    <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Fetching news...</div>
+                </div>
+            </div>
         </aside>
 
         <!-- Main Content Area -->
@@ -41,6 +48,13 @@
                         <h2 id="activeSymbolName">Select a Quote</h2>
                         <span id="activeSymbolPrice" class="active-price">--</span>
                         <span id="activeSymbolChange" class="active-change">--</span>
+                    </div>
+                    <div id="techIndicators" class="tech-indicators"
+                        style="display: none; gap: 15px; background: rgba(0,0,0,0.2); padding: 5px 15px; border-radius: 20px; font-size: 0.75rem; border: 1px solid rgba(255,255,255,0.05);">
+                        <span>SMA(20): <b id="smaVal">--</b></span>
+                        <span>RSI: <b id="rsiVal">--</b></span>
+                        <span id="signalVal"
+                            style="padding: 2px 8px; border-radius: 10px; font-weight: bold; font-size: 0.7rem;">--</span>
                     </div>
                     <div class="chart-actions">
                         <button id="buyBtn" class="btn btn-success" disabled><i class="fas fa-shopping-cart"></i>

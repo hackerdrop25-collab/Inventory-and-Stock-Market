@@ -103,6 +103,13 @@ class NexusAnimation {
                 this.setFlowState('alert');
                 setTimeout(() => this.setFlowState('idle'), 5000);
                 break;
+            case 'ai_insight':
+                this.triggerPulse(25);
+                // Temporarily shift hue for AI moments
+                const oldHue = this.hue;
+                this.hue = 280; // Purple/Magic hue
+                setTimeout(() => this.hue = oldHue, 2000);
+                break;
         }
     }
 

@@ -10,6 +10,7 @@ from io import StringIO
 from market_utils import get_market_summary
 from validators import (validate_email_address, validate_password, validate_product_input, 
                         validate_sale_input, validate_supplier_input, validate_return_input)
+from gemini_ai import ai_assistant
 
 # Load environment variables
 load_dotenv()
@@ -1105,6 +1106,58 @@ def api_realtime_updates():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ai/market-insights')
+@login_required
+def api_ai_market_insights():
+    from market_utils import get_market_summary
+    data = get_market_summary()
+    insights = ai_assistant.get_market_insights(data)
+    return jsonify({'insights': insights})
+
+@app.route('/api/ai/inventory-advice')
+@login_required
+def api_ai_inventory_advice():
+    low_stock = list(products_collection.find({'quantity': {'$lte': 5}}))
+    for p in low_stock: p['_id'] = str(p['_id'])
+    
+    # Top 5 products by revenue for trending items
+    top_products = list(sales_collection.aggregate([
+        {'$group': {
+            '_id': '$product_name',
+            'revenue': {'$sum': '$total_price'}
+        }},
+        {'$sort': {'revenue': -1}},
+        {'$limit': 5}
+    ]))
+    
+    advice = ai_assistant.get_inventory_advice(low_stock, top_products)
+    return jsonify({'advice': advice})
+
+@app.route('/api/market/news')
+@login_required
+def api_market_news():
+    symbol = request.args.get('symbol', '').strip().upper()
+    from news_service import news_service
+    if symbol:
+        news = news_service.get_symbol_news(symbol)
+    else:
+        news = news_service.get_market_news()
+    return jsonify(news)
+
+@app.route('/api/market/indicators')
+@login_required
+def api_market_indicators():
+    symbol = request.args.get('symbol', '').strip().upper()
+    if not symbol:
+        return jsonify({'error': 'No symbol provided'}), 400
+    
+    from market_utils import get_technical_indicators
+    indicators = get_technical_indicators(symbol)
+    if indicators:
+        return jsonify(indicators)
+    else:
+        return jsonify({'error': 'Could not calculate indicators'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

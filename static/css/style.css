@@ -67,16 +67,18 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    transition: all 0.5s ease;
 }
 
 /* Glassmorphism Utilities */
 .glass-panel {
     background: var(--glass-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
     border: 1px solid var(--glass-border);
-    border-radius: 16px;
+    border-radius: 20px;
     box-shadow: var(--card-shadow);
+    transition: all 0.3s ease;
 }
 
 .btn {
@@ -187,6 +189,23 @@ body {
 
 .form-control:focus {
     outline: none;
+    border-color: var(--accent-color);
+}
+
+.market-card {
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+}
+
+.market-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.4);
     border-color: var(--accent-color);
 }
 
@@ -360,4 +379,33 @@ tr:hover td {
 
 .new-row {
     animation: flash 2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ai-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+}
+
+.ai-box {
+    background: rgba(255, 255, 255, 0.02);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+    transition: all 0.3s ease;
+}
+
+.ai-box:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--warning-color);
 }
