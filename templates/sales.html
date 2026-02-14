@@ -9,186 +9,372 @@
     <!-- New Sale Form -->
     <div class="glass-panel" style="padding: 20px; height: fit-content;">
         <h2 style="margin-bottom: 20px;">New Transaction</h2>
-        <form method="POST" id="saleForm">
-            <div class="form-group">
-                <label class="form-label">Select Product <span style="color: var(--danger-color);">*</span></label>
-                <select name="product_id" id="productSelect" class="form-control" required onchange="updatePrice()">
-                    <option value="" disabled selected>Loading products...</option>
-                    {% for product in products %}
-                    <option value="{{ product._id }}" data-price="{{ product.price }}" data-stock="{{ product.quantity }}">
-                        {{ product.name }} ({{ product.quantity }} in stock) - ${{ "%.2f"|format(product.price) }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Quantity <span style="color: var(--danger-color);">*</span></label>
-                <input type="number" name="quantity" id="quantityInput" class="form-control" min="1" required
-                    oninput="calculateTotal()" placeholder="0">
-                <small style="color: var(--text-secondary);" id="stockWarning"></small>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Customer Name</label>
-                <input type="text" name="customer_name" class="form-control" placeholder="Optional (default: Walk-in Customer)"
-                    value="Walk-in Customer">
+        <!-- POS Section -->
+        <div class="glass-panel"
+            style="padding: 20px; height: fit-content; display: flex; flex-direction: column; gap: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0;"><i class="fas fa-cash-register"></i> New Transaction</h2>
+                <button onclick="clearCart()" class="btn btn-sm"
+                    style="background: rgba(239, 68, 68, 0.2); color: var(--danger-color);">
+                    <i class="fas fa-trash"></i> Clear Cart
+                </button>
             </div>
 
-            <div class="glass-panel"
-                style="background: rgba(66, 133, 244, 0.1); border: 1px solid var(--primary-color); padding: 15px; margin-bottom: 20px; text-align: center; border-radius: 8px;">
-                <div style="color: var(--text-secondary); font-size: 0.9rem;">Estimated Total</div>
-                <div id="totalDisplay" style="font-size: 1.8rem; font-weight: 700; color: var(--success-color);">$0.00
+            <!-- Product Search & Add -->
+            <div
+                style="display: grid; gap: 10px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label">Search Product</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="productSelect" class="form-control" style="flex: 1;">
+                            <option value="" disabled selected>Select product to add...</option>
+                            {% for product in products %}
+                            <option value="{{ product._id }}" data-name="{{ product.name }}"
+                                data-price="{{ product.price }}" data-stock="{{ product.quantity }}">
+                                {{ product.name }} (${{ "%.2f"|format(product.price) }}) - Stock: {{ product.quantity }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button onclick="addToCart()" class="btn btn-primary" style="padding: 0 20px;">
+                            <i class="fas fa-plus"></i> Add
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">
-                <i class="fas fa-plus-circle"></i> Confirm Sale
+            <!-- Cart Table -->
+            <div class="table-container"
+                style="max-height: 300px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;">
+                <table id="cartTable" style="margin: 0;">
+                    <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;">
+                        <tr>
+                            <th>Product</th>
+                            <th style="width: 80px;">Qty</th>
+                            <th style="width: 100px;">Price</th>
+                            <th style="width: 100px;">Total</th>
+                            <th style="width: 40px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="emptyCartRow">
+                            <td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                                Cart is empty
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Totals & Checkout -->
+            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>Subtotal:</span>
+                    <span id="subtotalDisplay" style="font-weight: bold;">$0.00</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <span>Discount ($):</span>
+                    <input type="number" id="discountInput" class="form-control" style="width: 80px; padding: 5px;"
+                        value="0" min="0" oninput="calculateTotals()">
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span>Tax (%):</span>
+                    <input type="number" id="taxInput" class="form-control" style="width: 80px; padding: 5px;" value="0"
+                        min="0" oninput="calculateTotals()">
+                </div>
+                <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;"></div>
+                <div
+                    style="display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: bold; color: var(--success-color);">
+                    <span>Total:</span>
+                    <span id="grandTotalDisplay">$0.00</span>
+                </div>
+            </div>
+
+            <!-- Customer & Payment -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label">Customer Name</label>
+                    <input type="text" id="customerName" class="form-control" placeholder="Walk-in Customer"
+                        value="Walk-in Customer">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label">Payment Method</label>
+                    <select id="paymentMethod" class="form-control">
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Card</option>
+                        <option value="Online">Online / UPI</option>
+                    </select>
+                </div>
+            </div>
+
+            <button onclick="processSale()" class="btn btn-primary"
+                style="width: 100%; justify-content: center; margin-top: 10px; font-size: 1.1rem; padding: 12px;">
+                <i class="fas fa-check-circle"></i> Complete Sale & Print
             </button>
-        </form>
+        </div>
+
+        <!-- Recent Transactions Section (Unchanged) -->
+        <div class="glass-panel" style="padding: 20px;">
+            <!-- ... existing search/filter ... -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 1rem;">Search Transactions</h3>
+                <form method="GET" style="display: grid; gap: 10px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group" style="margin: 0;">
+                            <input type="text" name="search" value="{{ search_query }}" class="form-control"
+                                placeholder="Search by product, customer...">
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="date" name="date_from" value="{{ date_from }}" class="form-control">
+                            <input type="date" name="date_to" value="{{ date_to }}" class="form-control">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 0.3;">
+                            <i class="fas fa-search"></i> Filter
+                        </button>
+                        <a href="{{ url_for('sales') }}" class="btn"
+                            style="flex: 0.3; background: rgba(255,255,255,0.1);">
+                            <i class="fas fa-redo"></i> Clear
+                        </a>
+                    </div>
+                </form>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Recent Transactions</h2>
+            </div>
+            <div class="table-container">
+                <table id="salesTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Product/Items</th>
+                            <th>Customer</th>
+                            <th>Amount</th>
+                            <th>Payment</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>{{ transaction.date.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                {% if transaction.items %}
+                                <span title="{{ transaction.items|map(attribute='product_name')|join(', ') }}">
+                                    {{ transaction.items|length }} Items
+                                </span>
+                                {% else %}
+                                {{ transaction.product_name }}
+                                {% endif %}
+                            </td>
+                            <td>{{ transaction.customer_name }}</td>
+                            <td style="color: var(--success-color); font-weight: bold;">
+                                ${{ "%.2f"|format(transaction.total_price) }}
+                            </td>
+                            <td>{{ transaction.payment_method or 'Cash' }}</td>
+                            <td>
+                                {% if transaction._id %}
+                                <a href="{{ url_for('invoice', transaction_id=transaction._id) }}" target="_blank"
+                                    class="btn btn-sm" style="background: rgba(255,255,255,0.1); padding: 5px 10px;">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 20px;">No transactions found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <!-- Recent Transactions -->
-    <div class="glass-panel" style="padding: 20px;">
-        <!-- Search and Filter -->
-        <div style="margin-bottom: 20px;">
-            <h3 style="margin-bottom: 1rem;">Search Transactions</h3>
-            <form method="GET" style="display: grid; gap: 10px;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div class="form-group" style="margin: 0;">
-                        <input type="text" name="search" value="{{ search_query }}" class="form-control" 
-                            placeholder="Search by product, customer...">
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="date" name="date_from" value="{{ date_from }}" class="form-control">
-                        <input type="date" name="date_to" value="{{ date_to }}" class="form-control">
-                    </div>
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button type="submit" class="btn btn-primary" style="flex: 0.3;">
-                        <i class="fas fa-search"></i> Filter
-                    </button>
-                    <a href="{{ url_for('sales') }}" class="btn" style="flex: 0.3; background: rgba(255,255,255,0.1);">
-                        <i class="fas fa-redo"></i> Clear
-                    </a>
-                </div>
-            </form>
-        </div>
+    <style>
+        /* ... existing styles ... */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 15px;
+        }
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h2>Recent Transactions</h2>
-        </div>
-        <div class="table-container">
-            <table id="salesTable">
-                <thead>
-                    <tr>
-                        <th>S.No</th>
-                        <th>Date</th>
-                        <th>Product</th>
-                        <th>Customer</th>
-                        <th>Qty</th>
-                        <th>Unit Price</th>
-                        <th>Total</th>
-                        <th>Sold By</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% set counter = namespace(value=1) %}
-                    {% for transaction in transactions %}
-                    <tr>
-                        <td>{{ counter.value }}</td>
-                        <td>{{ transaction.date.strftime('%Y-%m-%d %H:%M') }}</td>
-                        <td><strong>{{ transaction.product_name }}</strong></td>
-                        <td>{{ transaction.customer_name }}</td>
-                        <td>{{ transaction.quantity }}</td>
-                        <td>${{ "%.2f"|format(transaction.price_per_unit) }}</td>
-                        <td style="color: var(--success-color); font-weight: bold;">${{ "%.2f"|format(transaction.total_price) }}</td>
-                        <td>{{ transaction.sold_by }}</td>
-                    </tr>
-                    {% set counter.value = counter.value + 1 %}
-                    {% else %}
-                    <tr>
-                        <td colspan="8" style="text-align: center; padding: 20px;">No sales records found</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+        .form-label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
 
-<style>
-.form-group {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 15px;
-}
+        .form-control {
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
 
-.form-label {
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: var(--text-primary);
-}
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background: rgba(66, 133, 244, 0.1);
+        }
+    </style>
 
-.form-control {
-    padding: 12px 15px;
-    background: rgba(0,0,0,0.2);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: var(--text-primary);
-    border-radius: 8px;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-}
+    <script>
+        let cart = [];
 
-.form-control:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    background: rgba(66, 133, 244, 0.1);
-}
-</style>
+        function addToCart() {
+            const select = document.getElementById('productSelect');
+            const option = select.options[select.selectedIndex];
 
-<script>
-    function updatePrice() {
-        calculateTotal();
-        updateStockWarning();
-    }
+            if (!option.value) return;
 
-    function updateStockWarning() {
-        const select = document.getElementById('productSelect');
-        const quantity = document.getElementById('quantityInput').value;
-        const stockWarning = document.getElementById('stockWarning');
-        
-        if (select.selectedIndex > 0) {
-            const stock = parseInt(select.options[select.selectedIndex].dataset.stock);
-            const qty = parseInt(quantity) || 0;
-            
-            if (qty > stock) {
-                stockWarning.style.color = 'var(--danger-color)';
-                stockWarning.innerHTML = `⚠️ Only ${stock} items available!`;
-            } else if (qty > 0 && qty <= 5 && qty <= stock) {
-                stockWarning.style.color = 'var(--warning-color)';
-                stockWarning.innerHTML = `Only ${stock - qty} items remaining`;
+            const productId = option.value;
+            const name = option.dataset.name;
+            const price = parseFloat(option.dataset.price);
+            const stock = parseInt(option.dataset.stock);
+
+            // Check availability
+            const existingItem = cart.find(item => item.id === productId);
+            const currentQty = existingItem ? existingItem.quantity : 0;
+
+            if (currentQty + 1 > stock) {
+                alert(`Insufficient stock! Only ${stock} available.`);
+                return;
+            }
+
+            if (existingItem) {
+                existingItem.quantity++;
             } else {
-                stockWarning.innerHTML = '';
+                cart.push({
+                    id: productId,
+                    name: name,
+                    price: price,
+                    quantity: 1,
+                    maxStock: stock
+                });
+            }
+
+            renderCart();
+            // Reset select
+            select.selectedIndex = 0;
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            renderCart();
+        }
+
+        function updateQty(index, change) {
+            const item = cart[index];
+            const newQty = item.quantity + change;
+
+            if (newQty > item.maxStock) {
+                alert(`Max stock reached! (${item.maxStock})`);
+                return;
+            }
+
+            if (newQty > 0) {
+                item.quantity = newQty;
+                renderCart();
             }
         }
-    }
 
-    function calculateTotal() {
-        const select = document.getElementById('productSelect');
-        const quantity = document.getElementById('quantityInput').value;
-        const totalDisplay = document.getElementById('totalDisplay');
-
-        if (select.selectedIndex > 0 && quantity) {
-            const price = parseFloat(select.options[select.selectedIndex].dataset.price);
-            const total = price * quantity;
-            totalDisplay.textContent = '$' + total.toFixed(2);
-        } else {
-            totalDisplay.textContent = '$0.00';
+        function clearCart() {
+            if (confirm('Are you sure you want to clear the cart?')) {
+                cart = [];
+                renderCart();
+            }
         }
-    }
 
-    // Populate products on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        // Products are already rendered by the template
-    });
-</script>
-{% endblock %}
+        function renderCart() {
+            const tbody = document.querySelector('#cartTable tbody');
+            const emptyRow = `<tr id="emptyCartRow"><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">Cart is empty</td></tr>`;
+
+            if (cart.length === 0) {
+                tbody.innerHTML = emptyRow;
+                calculateTotals();
+                return;
+            }
+
+            tbody.innerHTML = cart.map((item, index) => `
+            <tr>
+                <td>${item.name}</td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <button onclick="updateQty(${index}, -1)" style="background: none; border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">-</button>
+                        <span>${item.quantity}</span>
+                        <button onclick="updateQty(${index}, 1)" style="background: none; border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">+</button>
+                    </div>
+                </td>
+                <td>$${item.price.toFixed(2)}</td>
+                <td>$${(item.price * item.quantity).toFixed(2)}</td>
+                <td>
+                    <button onclick="removeFromCart(${index})" style="color: var(--danger-color); background: none; border: none; cursor: pointer;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+            calculateTotals();
+        }
+
+        function calculateTotals() {
+            const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+            const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+            const taxPercent = parseFloat(document.getElementById('taxInput').value) || 0;
+
+            const taxAmount = subtotal * (taxPercent / 100);
+            const grandTotal = Math.max(0, subtotal + taxAmount - discount);
+
+            document.getElementById('subtotalDisplay').textContent = '$' + subtotal.toFixed(2);
+            document.getElementById('grandTotalDisplay').textContent = '$' + grandTotal.toFixed(2);
+        }
+
+        async function processSale() {
+            if (cart.length === 0) {
+                alert('Cart is empty!');
+                return;
+            }
+
+            const saleData = {
+                items: cart,
+                customer_name: document.getElementById('customerName').value,
+                payment_method: document.getElementById('paymentMethod').value,
+                discount: parseFloat(document.getElementById('discountInput').value) || 0,
+                tax_percent: parseFloat(document.getElementById('taxInput').value) || 0,
+                grand_total: parseFloat(document.getElementById('grandTotalDisplay').textContent.replace('$', ''))
+            };
+
+            try {
+                const response = await fetch('/sales', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(saleData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Open invoice in new tab
+                    window.open(`/invoice/${result.transaction_id}`, '_blank');
+                    // Reload to update stock/tables
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error processing sale:', error);
+                alert('Failed to process sale. Check console.');
+            }
+        }
+    </script>
+    {% endblock %}

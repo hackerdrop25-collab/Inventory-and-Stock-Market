@@ -41,6 +41,7 @@ except Exception as e:
 users_collection = db['users']
 products_collection = db['products']
 sales_collection = db['sales']
+transactions_collection = db['transactions']
 suppliers_collection = db['suppliers']
 returns_collection = db['returns']
 firewall_logs = db['firewall_logs']
@@ -327,51 +328,78 @@ def update_product(id):
 @login_required
 def sales():
     if request.method == 'POST':
-        product_id = request.form.get('product_id', '').strip()
-        quantity = request.form.get('quantity', '')
-        customer_name = request.form.get('customer_name', 'Walk-in Customer').strip()
-        
-        # Validate input
-        is_valid, errors = validate_sale_input(quantity, customer_name)
-        if not is_valid:
-            for error in errors:
-                flash(error, 'error')
-            return redirect(url_for('sales'))
-        
-        if not product_id:
-            flash('Please select a product', 'error')
-            return redirect(url_for('sales'))
-        
-        quantity = int(quantity)
-        product = products_collection.find_one({'_id': ObjectId(product_id)})
-        
-        if product:
-            if product['quantity'] >= quantity:
-                total_price = product['price'] * quantity
-                
+        # Handle JSON (POS System)
+        if request.is_json:
+            data = request.json
+            items = data.get('items', [])
+            customer_name = data.get('customer_name', 'Walk-in Customer')
+            payment_method = data.get('payment_method', 'Cash')
+            discount = data.get('discount', 0)
+            tax_percent = data.get('tax_percent', 0)
+            grand_total = data.get('grand_total', 0)
+
+            if not items:
+                return jsonify({'success': False, 'error': 'No items in cart'})
+
+            # Verify stock for ALL items first
+            for item in items:
+                product = products_collection.find_one({'_id': ObjectId(item['id'])})
+                if not product or product['quantity'] < item['quantity']:
+                    return jsonify({'success': False, 'error': f"Insufficient stock for {item['name']}"})
+
+            # Process Transaction
+            transaction_id = ObjectId()
+            transaction_items = []
+            
+            for item in items:
                 # Deduct Stock
-                products_collection.update_one({'_id': ObjectId(product_id)}, {'$inc': {'quantity': -quantity}})
+                products_collection.update_one(
+                    {'_id': ObjectId(item['id'])}, 
+                    {'$inc': {'quantity': -item['quantity']}}
+                )
                 
-                # Record Sale
+                # Record individual sale (for analytics compatibility)
                 sales_collection.insert_one({
-                    'product_name': product['name'],
-                    'product_id': ObjectId(product_id),
-                    'quantity': quantity,
-                    'price_per_unit': product['price'],
-                    'total_price': total_price,
+                    'transaction_id': transaction_id,
+                    'product_name': item['name'],
+                    'product_id': ObjectId(item['id']),
+                    'quantity': item['quantity'],
+                    'price_per_unit': item['price'],
+                    'total_price': item['price'] * item['quantity'],
                     'customer_name': customer_name,
-                    'supplier_name': product.get('supplier', 'Unknown'),
                     'date': datetime.now(),
                     'sold_by': session['user']
                 })
-                flash(f'Sale successful! Total: ${total_price:.2f}', 'success')
-            else:
-                flash(f'Insufficient stock! Available: {product["quantity"]}', 'error')
-        else:
-            flash('Product not found!', 'error')
-        return redirect(url_for('sales'))
 
-    # Advanced search for sales
+                transaction_items.append({
+                    'product_id': ObjectId(item['id']),
+                    'product_name': item['name'],
+                    'quantity': item['quantity'],
+                    'price': item['price'],
+                    'total': item['price'] * item['quantity']
+                })
+
+            # Record full transaction
+            transactions_collection.insert_one({
+                '_id': transaction_id,
+                'items': transaction_items,
+                'total_items': len(items),
+                'subtotal': sum(i['total'] for i in transaction_items),
+                'discount': discount,
+                'tax_percent': tax_percent,
+                'grand_total': grand_total,  # You might want to recalculate this server-side for security
+                'customer_name': customer_name,
+                'payment_method': payment_method,
+                'date': datetime.now(),
+                'sold_by': session['user']
+            })
+
+            return jsonify({'success': True, 'transaction_id': str(transaction_id)})
+        
+        # Legacy Form Post (Fallthrough or Error)
+        return jsonify({'success': False, 'error': 'Invalid request format'})
+
+    # Advanced search for sales (Transactions)
     search_query = request.args.get('search', '').strip()
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
@@ -379,17 +407,18 @@ def sales():
     prod_filter = {}
     products_list = products_collection.find(prod_filter).sort('name', 1)
     
-    sale_filter = {}
+    txn_filter = {}
     if search_query:
-        sale_filter['$or'] = [
-            {'product_name': {'$regex': search_query, '$options': 'i'}},
-            {'customer_name': {'$regex': search_query, '$options': 'i'}}
+        txn_filter['$or'] = [
+            {'customer_name': {'$regex': search_query, '$options': 'i'}},
+            # Search inside items array for product name
+            {'items.product_name': {'$regex': search_query, '$options': 'i'}}
         ]
     
     if date_from:
         try:
             date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
-            sale_filter.setdefault('date', {})['$gte'] = date_from_obj
+            txn_filter.setdefault('date', {})['$gte'] = date_from_obj
         except:
             pass
     
@@ -397,13 +426,25 @@ def sales():
         try:
             date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
             date_to_obj = date_to_obj.replace(hour=23, minute=59, second=59)
-            sale_filter.setdefault('date', {})['$lte'] = date_to_obj
+            txn_filter.setdefault('date', {})['$lte'] = date_to_obj
         except:
             pass
     
-    recent_transactions = sales_collection.find(sale_filter).sort('date', -1).limit(10)
+    recent_transactions = transactions_collection.find(txn_filter).sort('date', -1).limit(20)
     return render_template('sales.html', products=products_list, transactions=recent_transactions,
                           search_query=search_query, date_from=date_from, date_to=date_to)
+
+
+@app.route('/invoice/<transaction_id>')
+@login_required
+def invoice(transaction_id):
+    try:
+        transaction = transactions_collection.find_one({'_id': ObjectId(transaction_id)})
+        if not transaction:
+            return "Transaction not found", 404
+        return render_template('invoice.html', transaction=transaction)
+    except:
+        return "Invalid Transaction ID", 400
 
 
 @app.route('/suppliers', methods=['GET', 'POST'])
