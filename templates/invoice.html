@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice #{{ transaction._id }}</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            background: #f9f9f9;
+        }
+
+        .invoice-container {
+            background: white;
+            padding: 40px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 20px;
+        }
+
+        .company-info h1 {
+            margin: 0;
+            color: #2c3e50;
+        }
+
+        .invoice-details {
+            text-align: right;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .totals {
+            margin-left: auto;
+            width: 300px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+
+        .grand-total {
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-top: 2px solid #333;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        .actions {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .invoice-container {
+                box-shadow: none;
+                padding: 0;
+            }
+
+            .actions {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="invoice-container">
+        <div class="header">
+            <div class="company-info">
+                <h1>IMS Corp</h1>
+                <p>123 Business Road<br>Tech City, TC 90210</p>
+            </div>
+            <div class="invoice-details">
+                <h2>INVOICE</h2>
+                <p><strong>ID:</strong> {{ transaction._id }}</p>
+                <p><strong>Date:</strong> {{ transaction.date.strftime('%Y-%m-%d %H:%M') }}</p>
+            </div>
+        </div>
+
+        <div class="customer-info" style="margin-bottom: 30px;">
+            <h3>Bill To:</h3>
+            <p>{{ transaction.customer_name }}</p>
+            <p><strong>Payment Method:</strong> {{ transaction.payment_method }}</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in transaction.items %}
+                <tr>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>${{ "%.2f"|format(item.price) }}</td>
+                    <td>${{ "%.2f"|format(item.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <div class="totals-row">
+                <span>Subtotal:</span>
+                <span>${{ "%.2f"|format(transaction.subtotal) }}</span>
+            </div>
+            {% if transaction.discount > 0 %}
+            <div class="totals-row" style="color: #e74c3c;">
+                <span>Discount:</span>
+                <span>-${{ "%.2f"|format(transaction.discount) }}</span>
+            </div>
+            {% endif %}
+            {% if transaction.tax_percent > 0 %}
+            <div class="totals-row">
+                <span>Tax ({{ transaction.tax_percent }}%):</span>
+                <span>+${{ "%.2f"|format(transaction.subtotal * transaction.tax_percent / 100) }}</span>
+            </div>
+            {% endif %}
+            <div class="totals-row grand-total">
+                <span>Total:</span>
+                <span>${{ "%.2f"|format(transaction.grand_total) }}</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Thank you for your business!</p>
+            <p>Sold by: {{ transaction.sold_by }}</p>
+        </div>
+    </div>
+
+    <div class="actions">
+        <button onclick="window.print()" class="btn">Print Invoice</button>
+        <button onclick="window.close()" class="btn" style="background: #95a5a6;">Close</button>
+    </div>
+</body>
+
+</html>
