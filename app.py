@@ -134,7 +134,6 @@ def register():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
-        role = request.form.get('role', 'User')
         
         # Validate email
         is_valid_email, email_msg = validate_email_address(username)
@@ -154,10 +153,15 @@ def register():
             flash('Email already registered. Please login.', 'error')
             return render_template('register.html')
         
-        # Prevent non-admin registrations as Admin
-        if role == 'Admin' and username != ADMIN_EMAIL:
-            role = 'User'
-            flash('Only authorized email can register as Admin. Role set to User.', 'warning')
+        # Secure Role Assignment
+        # Check if any users exist
+        user_count = users_collection.count_documents({})
+        if user_count == 0:
+            role = 'Admin'
+            flash_msg = 'Admin account created successfully! Please login.'
+        else:
+            role = 'Student'
+            flash_msg = 'Student account created successfully! Please login.'
         
         hashed_password = generate_password_hash(password)
         users_collection.insert_one({
@@ -166,7 +170,7 @@ def register():
             'role': role,
             'created_at': datetime.now()
         })
-        flash('Registration successful! Please login.', 'success')
+        flash(flash_msg, 'success')
         return redirect(url_for('login'))
             
     return render_template('register.html')
