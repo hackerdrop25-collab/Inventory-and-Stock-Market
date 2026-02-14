@@ -35,7 +35,8 @@
     <div class="glass-panel" style="padding: 20px; border: 1px solid var(--danger-color);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h2 style="color: var(--danger-color);"><i class="fas fa-exclamation-circle"></i> Low Stock Alerts</h2>
-            <span style="background: var(--danger-color); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">
+            <span
+                style="background: var(--danger-color); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">
                 {{ low_stock|length }} Items
             </span>
         </div>
@@ -52,22 +53,27 @@
                 </thead>
                 <tbody>
                     {% for item in low_stock %}
-                    <tr style="{% if item.quantity == 0 %}background: rgba(239, 68, 68, 0.1);{% endif %}">
+                    <tr class="{% if item.quantity == 0 %}out-of-stock{% endif %}">
                         <td><strong>{{ item.name }}</strong></td>
                         <td>{{ item.category }}</td>
                         <td>{{ item.quantity }} units</td>
                         <td>{{ item.supplier }}</td>
                         <td>
                             {% if item.quantity == 0 %}
-                            <span style="background: var(--danger-color); color: white; padding: 3px 8px; border-radius: 5px; font-size: 0.85rem;">Out of Stock</span>
+                            <span
+                                style="background: var(--danger-color); color: white; padding: 3px 8px; border-radius: 5px; font-size: 0.85rem;">Out
+                                of Stock</span>
                             {% else %}
-                            <span style="background: var(--warning-color); color: black; padding: 3px 8px; border-radius: 5px; font-size: 0.85rem;">Low Stock</span>
+                            <span
+                                style="background: var(--warning-color); color: black; padding: 3px 8px; border-radius: 5px; font-size: 0.85rem;">Low
+                                Stock</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 20px;">✓ All items have sufficient stock</td>
+                        <td colspan="5" style="text-align: center; padding: 20px;">✓ All items have sufficient stock
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -147,38 +153,8 @@
 
 </div>
 
-<style>
-.export-buttons {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.export-buttons a {
-    padding: 10px 20px !important;
-    white-space: nowrap;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-table th {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 12px;
-    text-align: left;
-    font-weight: 600;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-}
-
-table td {
-    padding: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-table tr:hover {
-    background: rgba(255, 255, 255, 0.02);
+.out-of-stock {
+background: rgba(239, 68, 68, 0.1);
 }
 </style>
 {% endblock %}
