@@ -215,7 +215,10 @@ def dashboard():
         today_revenue = today_sales_list[0]['total']
         
     # Recent Sales
-    recent_sales = list(sales_collection.find({}).sort('date', -1).limit(5))
+    sales_filter = {}
+    sales_filter = {}
+        
+    recent_sales = sales_collection.find(sales_filter).sort('date', -1).limit(5)
     
     return render_template('dashboard.html', 
                            total_products=total_products,
@@ -239,8 +242,8 @@ def products():
         if not is_valid:
             for error in errors:
                 flash(error, 'error')
-            return render_template('products.html', products=list(products_collection.find()), 
-                                   suppliers=list(suppliers_collection.find()))
+            return render_template('products.html', products=products_collection.find(), 
+                                   suppliers=suppliers_collection.find())
         
         products_collection.insert_one({
             'name': name,
@@ -269,8 +272,8 @@ def products():
     if category_filter:
         filter_query['category'] = category_filter
     
-    products_list = list(products_collection.find(filter_query))
-    suppliers_list = list(suppliers_collection.find())
+    products_list = products_collection.find(filter_query)
+    suppliers_list = suppliers_collection.find()
     categories = [p['category'] for p in products_collection.find({}, {'category': 1})]
     categories = list(set(categories))  # Remove duplicates
     
@@ -406,7 +409,7 @@ def sales():
     date_to = request.args.get('date_to', '')
     
     prod_filter = {}
-    products_list = list(products_collection.find(prod_filter).sort('name', 1))
+    products_list = products_collection.find(prod_filter).sort('name', 1)
     
     txn_filter = {}
     if search_query:
@@ -431,7 +434,7 @@ def sales():
         except:
             pass
     
-    recent_transactions = list(transactions_collection.find(txn_filter).sort('date', -1).limit(20))
+    recent_transactions = transactions_collection.find(txn_filter).sort('date', -1).limit(20)
     return render_template('sales.html', products=products_list, transactions=recent_transactions,
                           search_query=search_query, date_from=date_from, date_to=date_to)
 
@@ -463,7 +466,7 @@ def suppliers():
         if not is_valid:
             for error in errors:
                 flash(error, 'error')
-            return render_template('suppliers.html', suppliers=list(suppliers_collection.find()))
+            return render_template('suppliers.html', suppliers=suppliers_collection.find())
         
         suppliers_collection.insert_one({
             'name': name,
@@ -484,7 +487,7 @@ def suppliers():
             {'email': {'$regex': search_query, '$options': 'i'}}
         ]
     
-    suppliers_list = list(suppliers_collection.find(filter_query))
+    suppliers_list = suppliers_collection.find(filter_query)
     return render_template('suppliers.html', suppliers=suppliers_list, search_query=search_query)
 
 
@@ -502,8 +505,8 @@ def returns():
         if not is_valid:
             for error in errors:
                 flash(error, 'error')
-            products_list = list(products_collection.find().sort('name', 1))
-            return render_template('returns.html', products=products_list, returns=list(returns_collection.find()))
+            products_list = products_collection.find().sort('name', 1)
+            return render_template('returns.html', products=products_list, returns=returns_collection.find())
         
         if not product_id:
             flash('Please select a product', 'error')
@@ -532,7 +535,7 @@ def returns():
     date_from = request.args.get('date_from', '')
     
     prod_filter = {}
-    products_list = list(products_collection.find(prod_filter).sort('name', 1))
+    products_list = products_collection.find(prod_filter).sort('name', 1)
     
     return_filter = {}
     if search_query:
@@ -548,7 +551,7 @@ def returns():
         except:
             pass
     
-    recent_returns = list(returns_collection.find(return_filter).sort('date', -1))
+    recent_returns = returns_collection.find(return_filter).sort('date', -1)
     
     return render_template('returns.html', products=products_list, returns=recent_returns,
                           search_query=search_query, date_from=date_from)
@@ -809,11 +812,11 @@ def api_summary():
     low_stock = products_collection.count_documents({'quantity': {'$lte': 5}})
     
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_sales = list(sales_collection.aggregate([
+    today_sales = sales_collection.aggregate([
         {'$match': {'date': {'$gte': today_start}}},
         {'$group': {'_id': None, 'total': {'$sum': '$total_price'}}}
-    ]))
-    today_revenue = today_sales[0]['total'] if today_sales else 0
+    ])
+    today_revenue = list(today_sales)[0]['total'] if today_sales else 0
     
     recent_sales = list(sales_collection.find().sort('date', -1).limit(5))
     for s in recent_sales:

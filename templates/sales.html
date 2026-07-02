@@ -170,7 +170,7 @@
                             </td>
                             <td>{{ transaction.customer_name }}</td>
                             <td style="color: var(--success-color); font-weight: bold;">
-                                ${{ "%.2f"|format(transaction.total_price) }}
+                                ${{ "%.2f"|format(transaction.grand_total or transaction.total_price or 0) }}
                             </td>
                             <td>{{ transaction.payment_method or 'Cash' }}</td>
                             <td>
