@@ -484,7 +484,7 @@ def suppliers():
             {'email': {'$regex': search_query, '$options': 'i'}}
         ]
     
-    suppliers_list = suppliers_collection.find(filter_query)
+    suppliers_list = list(suppliers_collection.find(filter_query))
     return render_template('suppliers.html', suppliers=suppliers_list, search_query=search_query)
 
 
@@ -502,8 +502,8 @@ def returns():
         if not is_valid:
             for error in errors:
                 flash(error, 'error')
-            products_list = products_collection.find().sort('name', 1)
-            return render_template('returns.html', products=products_list, returns=returns_collection.find())
+            products_list = list(products_collection.find().sort('name', 1))
+            return render_template('returns.html', products=products_list, returns=list(returns_collection.find()))
         
         if not product_id:
             flash('Please select a product', 'error')
@@ -532,7 +532,7 @@ def returns():
     date_from = request.args.get('date_from', '')
     
     prod_filter = {}
-    products_list = products_collection.find(prod_filter).sort('name', 1)
+    products_list = list(products_collection.find(prod_filter).sort('name', 1))
     
     return_filter = {}
     if search_query:
@@ -548,7 +548,7 @@ def returns():
         except:
             pass
     
-    recent_returns = returns_collection.find(return_filter).sort('date', -1)
+    recent_returns = list(returns_collection.find(return_filter).sort('date', -1))
     
     return render_template('returns.html', products=products_list, returns=recent_returns,
                           search_query=search_query, date_from=date_from)
