@@ -6,3 +6,5 @@ yfinance
 python-dotenv
 email-validator
 google-generativeai
+openpyxl
+reportlab

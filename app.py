@@ -237,7 +237,7 @@ def dashboard():
     total_products = products_collection.count_documents(query_filter)
     
     # Low Stock (combine filter with low stock condition)
-    low_stock_filter = {'quantity': {'$lte': 5}}
+    low_stock_filter = {'quantity': {'$lt': LOW_STOCK_THRESHOLD}}
     low_stock_products = products_collection.count_documents(low_stock_filter)
     
     # Calculate Total Sales (Today)
@@ -355,6 +355,10 @@ def update_product(id):
             flash(error, 'error')
         return redirect(url_for('products'))
     
+    # Check previous quantity to detect threshold crossing
+    prev_product = products_collection.find_one({'_id': ObjectId(id)})
+    prev_qty = prev_product.get('quantity', 0) if prev_product else None
+
     result = products_collection.update_one({'_id': ObjectId(id)}, {'$set': {
         'name': name,
         'category': category,
@@ -362,6 +366,15 @@ def update_product(id):
         'quantity': int(quantity),
         'supplier': supplier
     }})
+
+    # If quantity dropped below threshold, send alert
+    try:
+        new_qty = int(quantity)
+        if prev_qty is not None and prev_qty >= LOW_STOCK_THRESHOLD and new_qty < LOW_STOCK_THRESHOLD:
+            prod_for_alert = {'name': name, 'quantity': new_qty, 'supplier': supplier}
+            send_low_stock_email(prod_for_alert)
+    except Exception:
+        pass
     
     if result.matched_count > 0:
         flash('Product updated successfully', 'success')
@@ -399,11 +412,23 @@ def sales():
             transaction_items = []
             
             for item in items:
-                # Deduct Stock
+                # Deduct Stock - check previous qty for alerts
+                prod = products_collection.find_one({'_id': ObjectId(item['id'])})
+                prev_qty = prod.get('quantity', 0) if prod else None
+                new_qty = prev_qty - int(item['quantity']) if prev_qty is not None else None
+
                 products_collection.update_one(
                     {'_id': ObjectId(item['id'])}, 
                     {'$inc': {'quantity': -item['quantity']}}
                 )
+
+                # Send low-stock alert if crossing threshold
+                try:
+                    if prev_qty is not None and prev_qty >= LOW_STOCK_THRESHOLD and new_qty is not None and new_qty < LOW_STOCK_THRESHOLD:
+                        prod_for_alert = {'name': item.get('name'), 'quantity': new_qty, 'supplier': prod.get('supplier')}
+                        send_low_stock_email(prod_for_alert)
+                except Exception:
+                    pass
                 
                 # Record individual sale (for analytics compatibility)
                 sales_collection.insert_one({
@@ -604,7 +629,7 @@ def returns():
 @login_required
 def reports():
     # Filters based on role
-    prod_filter = {'quantity': {'$lte': 5}}
+    prod_filter = {'quantity': {'$lt': LOW_STOCK_THRESHOLD}}
     sale_filter = {}
     return_filter = {}
     
@@ -755,7 +780,7 @@ def export_returns_csv():
 def export_low_stock_csv():
     """Export low stock items to CSV"""
     try:
-        low_stock = list(products_collection.find({'quantity': {'$lte': 5}}))
+        low_stock = list(products_collection.find({'quantity': {'$lt': LOW_STOCK_THRESHOLD}}))
         
         output = StringIO()
         writer = csv.writer(output)
@@ -781,6 +806,106 @@ def export_low_stock_csv():
         )
     except Exception as e:
         flash(f'Error exporting low stock: {str(e)}', 'error')
+        return redirect(url_for('reports'))
+
+
+@app.route('/export/products/xlsx')
+@login_required
+def export_products_xlsx():
+    try:
+        products_list = list(products_collection.find())
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['Name', 'Category', 'Price', 'Quantity', 'Supplier', 'Added By', 'Added At'])
+
+        for p in products_list:
+            ws.append([
+                p.get('name',''),
+                p.get('category',''),
+                float(p.get('price',0)),
+                int(p.get('quantity',0)),
+                p.get('supplier',''),
+                p.get('added_by',''),
+                p.get('added_at').strftime('%Y-%m-%d %H:%M') if p.get('added_at') else ''
+            ])
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                         as_attachment=True, download_name=f'products_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx')
+    except Exception as e:
+        flash(f'Error exporting Excel: {str(e)}','error')
+        return redirect(url_for('reports'))
+
+
+@app.route('/export/sales/xlsx')
+@login_required
+def export_sales_xlsx():
+    try:
+        sales_list = list(sales_collection.find().sort('date', -1))
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['Product', 'Quantity', 'Price/Unit', 'Total Price', 'Customer', 'Date', 'Sold By'])
+        for s in sales_list:
+            ws.append([
+                s.get('product_name',''),
+                int(s.get('quantity',0)),
+                float(s.get('price_per_unit',0)),
+                float(s.get('total_price',0)),
+                s.get('customer_name',''),
+                s.get('date').strftime('%Y-%m-%d %H:%M') if s.get('date') else '',
+                s.get('sold_by','')
+            ])
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                         as_attachment=True, download_name=f'sales_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx')
+    except Exception as e:
+        flash(f'Error exporting sales Excel: {str(e)}','error')
+        return redirect(url_for('reports'))
+
+
+@app.route('/export/low-stock/pdf')
+@login_required
+def export_low_stock_pdf():
+    try:
+        low_stock = list(products_collection.find({'quantity': {'$lt': LOW_STOCK_THRESHOLD}}))
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        styles = getSampleStyleSheet()
+        elements = []
+        elements.append(Paragraph('Low Stock Report', styles['Title']))
+        elements.append(Spacer(1,12))
+
+        data = [['Name','Category','Quantity','Price','Supplier','Alert Level']]
+        for p in low_stock:
+            alert = 'Critical' if p.get('quantity',0)==0 else 'Low'
+            data.append([
+                p.get('name',''),
+                p.get('category',''),
+                str(p.get('quantity',0)),
+                f"{p.get('price',0):.2f}",
+                p.get('supplier',''),
+                alert
+            ])
+
+        table = Table(data, hAlign='LEFT')
+        table.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),colors.grey),
+            ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
+            ('ALIGN',(0,0),(-1,-1),'LEFT'),
+            ('GRID',(0,0),(-1,-1),0.5,colors.black)
+        ]))
+        elements.append(table)
+        doc.build(elements)
+        buffer.seek(0)
+        return send_file(buffer, mimetype='application/pdf', as_attachment=True,
+                         download_name=f'low_stock_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf')
+    except Exception as e:
+        flash(f'Error exporting PDF: {str(e)}','error')
         return redirect(url_for('reports'))
 
 # --- Analytics API Routes ---
@@ -833,7 +958,7 @@ def api_analytics_dashboard():
         inventory_stats = {
             'total_items': products_collection.count_documents({}),
             'in_stock': products_collection.count_documents({'quantity': {'$gt': 0}}),
-            'low_stock': products_collection.count_documents({'quantity': {'$lte': 5, '$gt': 0}}),
+            'low_stock': products_collection.count_documents({'quantity': {'$lt': LOW_STOCK_THRESHOLD, '$gt': 0}}),
             'out_of_stock': products_collection.count_documents({'quantity': 0})
         }
         
@@ -852,7 +977,7 @@ def api_analytics_dashboard():
 @login_required
 def api_summary():
     total_products = products_collection.count_documents({})
-    low_stock = products_collection.count_documents({'quantity': {'$lte': 5}})
+    low_stock = products_collection.count_documents({'quantity': {'$lt': LOW_STOCK_THRESHOLD}})
     
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_sales = sales_collection.aggregate([
@@ -1162,7 +1287,7 @@ def api_realtime_updates():
     try:
         # 1. Statistics
         total_products = products_collection.count_documents({})
-        low_stock = products_collection.count_documents({'quantity': {'$lte': 5}})
+        low_stock = products_collection.count_documents({'quantity': {'$lt': LOW_STOCK_THRESHOLD}})
         
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_sales = sales_collection.aggregate([
@@ -1222,7 +1347,7 @@ def api_ai_market_insights():
 @app.route('/api/ai/inventory-advice')
 @login_required
 def api_ai_inventory_advice():
-    low_stock = list(products_collection.find({'quantity': {'$lte': 5}}))
+    low_stock = list(products_collection.find({'quantity': {'$lt': LOW_STOCK_THRESHOLD}}))
     for p in low_stock: p['_id'] = str(p['_id'])
     
     # Top 5 products by revenue for trending items
