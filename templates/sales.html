@@ -160,12 +160,12 @@
                         <tr>
                             <td>{{ transaction.date.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>
-                                {% if transaction.items %}
-                                <span title="{{ transaction.items|map(attribute='product_name')|join(', ') }}">
-                                    {{ transaction.items|length }} Items
+                                {% if transaction.get('items') %}
+                                <span title="{{ transaction.get('items', [])|map(attribute='product_name')|join(', ') }}">
+                                    {{ transaction.get('items', [])|length }} Items
                                 </span>
                                 {% else %}
-                                {{ transaction.product_name }}
+                                {{ transaction.get('product_name', '') }}
                                 {% endif %}
                             </td>
                             <td>{{ transaction.customer_name }}</td>

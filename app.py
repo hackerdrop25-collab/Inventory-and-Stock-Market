@@ -390,83 +390,100 @@ def sales():
     if request.method == 'POST':
         # Handle JSON (POS System)
         if request.is_json:
-            data = request.json
-            items = data.get('items', [])
-            customer_name = data.get('customer_name', 'Walk-in Customer')
-            payment_method = data.get('payment_method', 'Cash')
-            discount = data.get('discount', 0)
-            tax_percent = data.get('tax_percent', 0)
-            grand_total = data.get('grand_total', 0)
+            try:
+                data = request.json
+                items = data.get('items', [])
+                customer_name = data.get('customer_name', 'Walk-in Customer')
+                payment_method = data.get('payment_method', 'Cash')
+                discount = float(data.get('discount', 0))
+                tax_percent = float(data.get('tax_percent', 0))
+                grand_total = float(data.get('grand_total', 0))
 
-            if not items:
-                return jsonify({'success': False, 'error': 'No items in cart'})
+                if not items:
+                    return jsonify({'success': False, 'error': 'No items in cart'})
 
-            # Verify stock for ALL items first
-            for item in items:
-                product = products_collection.find_one({'_id': ObjectId(item['id'])})
-                if not product or product['quantity'] < item['quantity']:
-                    return jsonify({'success': False, 'error': f"Insufficient stock for {item['name']}"})
+                # Verify stock for ALL items first
+                for item in items:
+                    try:
+                        product = products_collection.find_one({'_id': ObjectId(item.get('id'))})
+                        if not product or product['quantity'] < int(item.get('quantity', 0)):
+                            return jsonify({'success': False, 'error': f"Insufficient stock for {item.get('name', 'Unknown')}"})
+                    except Exception as e:
+                        app.logger.error(f"Error looking up product {item.get('id')}: {e}")
+                        return jsonify({'success': False, 'error': f"Invalid product ID: {item.get('id')}"})
 
-            # Process Transaction
-            transaction_id = ObjectId()
-            transaction_items = []
-            
-            for item in items:
-                # Deduct Stock - check previous qty for alerts
-                prod = products_collection.find_one({'_id': ObjectId(item['id'])})
-                prev_qty = prod.get('quantity', 0) if prod else None
-                new_qty = prev_qty - int(item['quantity']) if prev_qty is not None else None
-
-                products_collection.update_one(
-                    {'_id': ObjectId(item['id'])}, 
-                    {'$inc': {'quantity': -item['quantity']}}
-                )
-
-                # Send low-stock alert if crossing threshold
-                try:
-                    if prev_qty is not None and prev_qty >= LOW_STOCK_THRESHOLD and new_qty is not None and new_qty < LOW_STOCK_THRESHOLD:
-                        prod_for_alert = {'name': item.get('name'), 'quantity': new_qty, 'supplier': prod.get('supplier')}
-                        send_low_stock_email(prod_for_alert)
-                except Exception:
-                    pass
+                # Process Transaction
+                transaction_id = ObjectId()
+                transaction_items = []
                 
-                # Record individual sale (for analytics compatibility)
-                sales_collection.insert_one({
-                    'transaction_id': transaction_id,
-                    'product_name': item['name'],
-                    'product_id': ObjectId(item['id']),
-                    'quantity': item['quantity'],
-                    'price_per_unit': item['price'],
-                    'total_price': item['price'] * item['quantity'],
-                    'customer_name': customer_name,
-                    'date': datetime.now(),
-                    'sold_by': session['user']
-                })
+                for item in items:
+                    item_name = item.get('name', 'Unknown')
+                    try:
+                        # Deduct Stock - check previous qty for alerts
+                        prod = products_collection.find_one({'_id': ObjectId(item.get('id'))})
+                        prev_qty = prod.get('quantity', 0) if prod else None
+                        new_qty = prev_qty - int(item.get('quantity', 0)) if prev_qty is not None else None
 
-                transaction_items.append({
-                    'product_id': ObjectId(item['id']),
-                    'product_name': item['name'],
-                    'quantity': item['quantity'],
-                    'price': item['price'],
-                    'total': item['price'] * item['quantity']
-                })
+                        products_collection.update_one(
+                            {'_id': ObjectId(item.get('id'))}, 
+                            {'$inc': {'quantity': -int(item.get('quantity', 0))}}
+                        )
 
-            # Record full transaction
-            transactions_collection.insert_one({
-                '_id': transaction_id,
-                'items': transaction_items,
-                'total_items': len(items),
-                'subtotal': sum(i['total'] for i in transaction_items),
-                'discount': discount,
-                'tax_percent': tax_percent,
-                'grand_total': grand_total,  # You might want to recalculate this server-side for security
-                'customer_name': customer_name,
-                'payment_method': payment_method,
-                'date': datetime.now(),
-                'sold_by': session['user']
-            })
+                        # Send low-stock alert if crossing threshold
+                        try:
+                            if prev_qty is not None and prev_qty >= LOW_STOCK_THRESHOLD and new_qty is not None and new_qty < LOW_STOCK_THRESHOLD:
+                                prod_for_alert = {'name': item_name, 'quantity': new_qty, 'supplier': prod.get('supplier') if prod else 'Unknown'}
+                                send_low_stock_email(prod_for_alert)
+                        except Exception:
+                            pass
+                        
+                        # Record individual sale (for analytics compatibility)
+                        sales_collection.insert_one({
+                            'transaction_id': transaction_id,
+                            'product_name': item_name,
+                            'product_id': ObjectId(item.get('id')),
+                            'quantity': int(item.get('quantity', 0)),
+                            'price_per_unit': float(item.get('price', 0)),
+                            'total_price': float(item.get('price', 0)) * int(item.get('quantity', 0)),
+                            'customer_name': customer_name,
+                            'date': datetime.now(),
+                            'sold_by': session['user']
+                        })
 
-            return jsonify({'success': True, 'transaction_id': str(transaction_id)})
+                        transaction_items.append({
+                            'product_id': ObjectId(item.get('id')),
+                            'product_name': item_name,
+                            'quantity': int(item.get('quantity', 0)),
+                            'price': float(item.get('price', 0)),
+                            'total': float(item.get('price', 0)) * int(item.get('quantity', 0))
+                        })
+                    except Exception as e:
+                        app.logger.error(f"Error processing item {item_name}: {e}")
+                        return jsonify({'success': False, 'error': f"Error processing {item_name}: {str(e)}"})
+
+                # Record full transaction
+                try:
+                    transactions_collection.insert_one({
+                        '_id': transaction_id,
+                        'items': transaction_items,
+                        'total_items': len(items),
+                        'subtotal': sum(i['total'] for i in transaction_items),
+                        'discount': discount,
+                        'tax_percent': tax_percent,
+                        'grand_total': grand_total,
+                        'customer_name': customer_name,
+                        'payment_method': payment_method,
+                        'date': datetime.now(),
+                        'sold_by': session['user']
+                    })
+                except Exception as e:
+                    app.logger.error(f"Error saving transaction: {e}")
+                    return jsonify({'success': False, 'error': f"Error saving transaction: {str(e)}"})
+
+                return jsonify({'success': True, 'transaction_id': str(transaction_id)})
+            except Exception as e:
+                app.logger.error(f"Unexpected error in sales POST: {e}")
+                return jsonify({'success': False, 'error': f"Unexpected error: {str(e)}"})
         
         # Legacy Form Post (Fallthrough or Error)
         return jsonify({'success': False, 'error': 'Invalid request format'})
@@ -684,7 +701,7 @@ def export_products_csv():
     try:
         products_list = list(products_collection.find())
         
-        output = StringIO()
+        output = BytesIO()
         writer = csv.writer(output)
         writer.writerow(['Name', 'Category', 'Price', 'Quantity', 'Supplier', 'Added By', 'Added At'])
         
@@ -717,7 +734,7 @@ def export_sales_csv():
     try:
         sales_list = list(sales_collection.find().sort('date', -1))
         
-        output = StringIO()
+        output = BytesIO()
         writer = csv.writer(output)
         writer.writerow(['Product', 'Quantity', 'Price/Unit', 'Total Price', 'Customer', 'Date', 'Sold By'])
         
@@ -750,7 +767,7 @@ def export_returns_csv():
     try:
         returns_list = list(returns_collection.find().sort('date', -1))
         
-        output = StringIO()
+        output = BytesIO()
         writer = csv.writer(output)
         writer.writerow(['Product', 'Quantity', 'Reason', 'Supplier', 'Date', 'Processed By'])
         
@@ -782,7 +799,7 @@ def export_low_stock_csv():
     try:
         low_stock = list(products_collection.find({'quantity': {'$lt': LOW_STOCK_THRESHOLD}}))
         
-        output = StringIO()
+        output = BytesIO()
         writer = csv.writer(output)
         writer.writerow(['Name', 'Category', 'Current Stock', 'Price', 'Supplier', 'Alert Level'])
         
@@ -1040,7 +1057,7 @@ def api_suppliers():
 @login_required
 def api_reports():
     # Similar logic to /reports but returning JSON
-    prod_filter = {'quantity': {'$lte': 5}}
+    prod_filter = {'quantity': {'$lt': LOW_STOCK_THRESHOLD}}
     if session.get('role') != 'Admin':
         prod_filter['added_by'] = session['user']
         

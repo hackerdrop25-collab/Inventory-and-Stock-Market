@@ -147,7 +147,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for item in transaction.items %}
+                {% for item in transaction.get('items', []) %}
                 <tr>
                     <td>{{ item.product_name }}</td>
                     <td>{{ item.quantity }}</td>
