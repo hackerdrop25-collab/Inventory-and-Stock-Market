@@ -6,7 +6,14 @@ from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 import csv
-from io import StringIO
+from io import StringIO, BytesIO
+import smtplib
+from email.message import EmailMessage
+from openpyxl import Workbook
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
 from market_utils import get_market_summary
 from validators import (validate_email_address, validate_password, validate_product_input, 
                         validate_sale_input, validate_supplier_input, validate_return_input)
@@ -17,6 +24,16 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'super_secret_inventory_key_change_this')
+
+# Low stock threshold (Quantity < LOW_STOCK_THRESHOLD triggers alerts)
+LOW_STOCK_THRESHOLD = int(os.getenv('LOW_STOCK_THRESHOLD', '10'))
+
+# SMTP settings for low-stock email alerts
+SMTP_HOST = os.getenv('SMTP_HOST')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USER = os.getenv('SMTP_USER')
+SMTP_PASS = os.getenv('SMTP_PASS')
+ALERT_RECIPIENT = os.getenv('ALERT_RECIPIENT', os.getenv('ADMIN_EMAIL', 'admin@example.com'))
 
 # MongoDB Connection
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
@@ -70,6 +87,32 @@ def admin_required(f):
         return f(*args, **kwargs)
     wrap.__name__ = f.__name__
     return wrap
+
+# Helper: send low-stock email alert
+def send_low_stock_email(product):
+    try:
+        if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+            app.logger.debug('SMTP not configured; skipping low-stock email')
+            return False
+
+        msg = EmailMessage()
+        msg['Subject'] = f"Low Stock Alert: {product.get('name', 'Unknown')}"
+        msg['From'] = SMTP_USER
+        msg['To'] = ALERT_RECIPIENT
+
+        body = f"Product: {product.get('name')}\nCurrent Quantity: {product.get('quantity')}\nSupplier: {product.get('supplier','N/A')}\n\nPlease restock this item soon."
+        msg.set_content(body)
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+
+        app.logger.info(f"Low stock email sent for {product.get('name')}")
+        return True
+    except Exception as e:
+        app.logger.error(f"Failed to send low-stock email: {e}")
+        return False
 
 # --- Routes ---
 
@@ -160,8 +203,8 @@ def register():
             role = 'Admin'
             flash_msg = 'Admin account created successfully! Please login.'
         else:
-            role = 'Student'
-            flash_msg = 'Student account created successfully! Please login.'
+            role = 'Employee'
+            flash_msg = 'Employee account created successfully! Please login.'
         
         hashed_password = generate_password_hash(password)
         users_collection.insert_one({
@@ -466,7 +509,7 @@ def suppliers():
         if not is_valid:
             for error in errors:
                 flash(error, 'error')
-            return render_template('suppliers.html', suppliers=suppliers_collection.find())
+            return render_template('suppliers.html', suppliers=list(suppliers_collection.find()))
         
         suppliers_collection.insert_one({
             'name': name,
@@ -487,7 +530,7 @@ def suppliers():
             {'email': {'$regex': search_query, '$options': 'i'}}
         ]
     
-    suppliers_list = suppliers_collection.find(filter_query)
+    suppliers_list = list(suppliers_collection.find(filter_query))
     return render_template('suppliers.html', suppliers=suppliers_list, search_query=search_query)
 
 
@@ -505,8 +548,8 @@ def returns():
         if not is_valid:
             for error in errors:
                 flash(error, 'error')
-            products_list = products_collection.find().sort('name', 1)
-            return render_template('returns.html', products=products_list, returns=returns_collection.find())
+            products_list = list(products_collection.find().sort('name', 1))
+            return render_template('returns.html', products=products_list, returns=list(returns_collection.find()))
         
         if not product_id:
             flash('Please select a product', 'error')
@@ -535,7 +578,7 @@ def returns():
     date_from = request.args.get('date_from', '')
     
     prod_filter = {}
-    products_list = products_collection.find(prod_filter).sort('name', 1)
+    products_list = list(products_collection.find(prod_filter).sort('name', 1))
     
     return_filter = {}
     if search_query:
@@ -551,7 +594,7 @@ def returns():
         except:
             pass
     
-    recent_returns = returns_collection.find(return_filter).sort('date', -1)
+    recent_returns = list(returns_collection.find(return_filter).sort('date', -1))
     
     return render_template('returns.html', products=products_list, returns=recent_returns,
                           search_query=search_query, date_from=date_from)
